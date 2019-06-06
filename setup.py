@@ -51,10 +51,10 @@ setup_keywords['test_suite']='nose2.collector.collector'
 setup_keywords['tests_require']=['nose2', 'nose2[coverage_plugin]>=0.6.5']
 
 requires = []
-with open('requirements.txt', 'r') as f:
-    for line in f:
-        if line.strip():
-            requires.append(line.strip())
+#with open('requirements.txt', 'r') as f:
+#    for line in f:
+#        if line.strip():
+#            requires.append(line.strip())
 setup_keywords['install_requires'] = requires
 #
 # Internal data directories.
