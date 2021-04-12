@@ -225,10 +225,7 @@ if __name__ == "__main__":
     # Data file is located at /home/sgriswold/sn-0.dat (04/10/2021)
     # Note, as written read_file will always start at the beginning of the file when called
     # Expected printed output as follows:
-<<<<<<< HEAD
     # Supernova@278941064807639342[dom 9486d3ddbece clk 000000000000 scalerData*602
-=======
->>>>>>> origin/reader
     # Supernova@278941064807846976[dom 53f98da44b15 clk 000000000000 scalerData*602
     # Supernova@278941064808092163[dom 1fa7b4422fb3 clk 000000000000 scalerData*602
     # Supernova@278941064808274711[dom 874f6acd472e clk 000000000000 scalerData*602
@@ -236,9 +233,7 @@ if __name__ == "__main__":
     # Supernova@278941064810075365[dom 58191b7511ea clk 000000000000 scalerData*602
     # Supernova@278941064810262845[dom 7e15a8e98ef4 clk 000000000000 scalerData*602
     # Supernova@278941064810445403[dom 1d4b599df4b8 clk 000000000000 scalerData*602
-<<<<<<< HEAD
     # Supernova@278941064810867258[dom 86e958e3f2a0 clk 000000000000 scalerData*602
     # Supernova@278941064811162841[dom b6735e6efb7c clk 000000000000 scalerData*602
-=======
     # Supernova@278941064810867258[dom 86e958e3f2a0 clk 000000000000 scalerData*602
->>>>>>> origin/reader
+
