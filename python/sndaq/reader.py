@@ -217,3 +217,7 @@ def read_file(filename, max_payloads, write_simple_hits=False):
     finally:
         if out is not None:
             out.close()
+
+
+if __name__ == "__main__":
+    read_file('./data/sn-0.dat', 10)
