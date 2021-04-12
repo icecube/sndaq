@@ -1,4 +1,7 @@
+import bz2
+import gzip
 import numbers
+import os
 import struct
 
 SN_TYPE_ID = 16
@@ -95,3 +98,122 @@ class SN_Payload(object):
     @property
     def utime(self):
         return self.__utime
+
+
+class PayloadReader(object):
+    "Read DAQ payloads from a file"
+
+    def __init__(self, filename, keep_data=True):
+        """
+        Open a payload file
+        """
+        if not os.path.exists(filename):
+            raise Exception("Cannot read \"%s\"" % filename)
+
+        if filename.endswith(".gz"):
+            fin = gzip.open(filename, "rb")
+        elif filename.endswith(".bz2"):
+            fin = bz2.BZ2File(filename)
+        else:
+            fin = open(filename, "rb")
+
+        self.__filename = filename
+        self.__fin = fin
+        self.__keep_data = keep_data
+        self.__num_read = 0
+
+    def __enter__(self):
+        """
+        Return this object as a context manager to used as
+        `with PayloadReader(filename) as payrdr:`
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Close the open filehandle when the context manager exits
+        """
+        self.close()
+
+    def __iter__(self):
+        """
+        Generator which returns payloads in `for payload in payrdr:` loops
+        """
+        while True:
+            if self.__fin is None:
+                # generator has been explicitly closed
+                return
+
+            # decode the next payload
+            pay = next(self)
+            if pay is None:
+                # must have hit the end of the file
+                return
+
+            # return the next payload
+            yield pay
+
+    def __next__(self):
+        "Read the next payload"
+        pay = self.decode_payload(self.__fin, keep_data=self.__keep_data)
+        self.__num_read += 1
+        return pay
+
+    def close(self):
+        """
+        Explicitly close the filehandle
+        """
+        if self.__fin is not None:
+            try:
+                self.__fin.close()
+            finally:
+                self.__fin = None
+
+    @property
+    def nrec(self):
+        """Number of payloads read to this point
+        """
+        return self.__num_read
+
+    @property
+    def filename(self):
+        """Name of file being read
+        """
+        return self.__filename
+
+    @classmethod
+    def decode_payload(cls, stream, keep_data=True):
+        """Decode and return the next payload
+        """
+        envelope = stream.read(SN_ENVELOPE_LENGTH)
+        if len(envelope) == 0:
+            return None
+
+        length, type_id, utime = struct.unpack(">iiq", envelope)
+
+        if length <= SN_ENVELOPE_LENGTH:
+            rawdata = None
+        else:
+            rawdata = stream.read(length - SN_ENVELOPE_LENGTH)
+
+        return SN_Payload(utime, rawdata, keep_data=keep_data)
+
+
+def read_file(filename, max_payloads, write_simple_hits=False):
+    if write_simple_hits and filename.startswith("HitSpool-"):
+        out = open("SimpleHit-" + filename[9:], "w")
+    else:
+        out = None
+
+    try:
+        with PayloadReader(filename) as rdr:
+            for pay in rdr:
+                if max_payloads is not None and rdr.nrec > max_payloads:
+                    break
+
+                print(str(pay))
+                if out is not None:
+                    out.write(pay.simple_hit)
+    finally:
+        if out is not None:
+            out.close()
