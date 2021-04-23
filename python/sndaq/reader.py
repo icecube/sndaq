@@ -11,12 +11,24 @@ SN_MAGIC_NUMBER = 300
 
 
 class SN_Payload(object):
-    TYPE_ID = None
-    ENVELOPE_LENGTH = 16
 
     def __init__(self, utime, data, keep_data=True):
+        """Convert SN scaler record data bytes into payload object.
+        See PayloadReader.decode_payload() for full description of record format.
+        Assumes argument data contains 18 bytes of additional payload fields before scaler data begins.
+
+        :param utime: UTC timestamp from year start
+        :type utime: int
+
+        :param data: SN record bytes
+        :type data: bytearray
+
+        :param keep_data: Switch to keep data (true) or skip (false)
+        :type keep_data: bool
+        """
         self.__utime = utime
-        if keep_data and data is not None:
+
+        if keep_data and data is not None:  # Keep data, data must be defined
             self.__data = data
             self.__has_data = True
         else:
@@ -24,14 +36,22 @@ class SN_Payload(object):
             self.__has_data = False
 
         if self.__has_data:
+            # Read SN Payload fields from bytes.
             scaler_len = len(data) - 18
-            flds = struct.unpack(">QHH6B%dB" % (scaler_len,), data)
+            flds = struct.unpack(">QHH6B{0:d}B".format(scaler_len), data)
+            # > - Big endian
+            # Q  - integer (8 bytes) - DOM mainboard ID, flds[0]
+            # H  - integer (2 bytes) - record length in bytes (10+scaler_len), flds[1]
+            # H  - integer (2 bytes) - SN record MAGIC NUMBER, flds[2]
+            # 6B - 6 integers (1 byte each) - DOM Clock bytes, flds[3:9]
+            # {0:d}B - scaler_len integers (1 byte each) - scaler data, flds[9:]
 
             self.__dom_id = flds[0]
             self.__clock_bytes = flds[3:9]
             self.__scaler_bytes = flds[9:]
 
-    def extract_clock_bytes(self, clock_bytes):
+    @staticmethod  # Decorator allows this method to be called without initializing the object
+    def extract_clock_bytes(clock_bytes):
         if isinstance(clock_bytes, numbers.Number):
             tmpbytes = []
             for _ in range(6):
@@ -47,12 +67,17 @@ class SN_Payload(object):
         raise Exception("Cannot convert %s to clock bytes" % (type(clock_bytes).__name__,))
 
     def __str__(self):
-        return "Supernova@%d[dom %012x clk %012x scalerData*%d" % \
-               (self.utime, self.__dom_id, self.domclock,
-                len(self.__scaler_bytes))
+        return "Supernova@{0:d}[dom {1:012x} clk {2:012x} scalerData*{3:d}".format(
+            self.utime, self.__dom_id, self.domclock, len(self.__scaler_bytes)
+        )
 
     @property
     def domclock(self):
+        """Number of DOM Clock cycles
+
+        :return: number of DOM clock cycles
+        :rtype: int
+        """
         val = 0
         for byte in self.__clock_bytes:
             val = (val << 8) + byte
@@ -60,13 +85,32 @@ class SN_Payload(object):
 
     @property
     def bytes(self):
+        """Binary representation of record, will only contain scaler data if keep_data = True
+
+        :return: binary representation of record
+        :rtype: bytearray
+        """
         if not self.has_data:
             return self.envelope
         else:
             return self.envelope + self.__data
 
     @property
+    def envelope(self):
+        """Binary representation of record envelope
+
+        :return:
+        :rtype:
+        """
+        return struct.pack(">2IQ", self.data_length + SN_ENVELOPE_LENGTH, self.type_id, self.__utime)
+
+    @property
     def data_bytes(self):
+        """Binary representation of record data (all fields other than envelope)
+
+        :return: binary representation of record data
+        :rtype: bytearray
+        """
         if not self.has_data:
             return None
         else:
@@ -74,41 +118,66 @@ class SN_Payload(object):
 
     @property
     def data_length(self):
+        """Number of data bytes (number of scaler bytes + 18)
+
+        :return: number of data bytes
+        :rtype: int
+        """
         if not self.has_data:
             return 0
         else:
             return len(self.__data)
 
     @property
-    def envelope(self):
-        return struct.pack(">2IQ", self.data_length + SN_ENVELOPE_LENGTH, self.type_id, self.__utime)
-
-    @property
     def has_data(self):
+        """Indicates if SN Payload contains SN scaler data (true) or not (false)
+
+        :return: indicates if SN payload contains SN scaler data
+        :rtype: bool
+        """
         return self.__has_data
 
     @property
     def type_id(self):
+        """IceCube Payload ID (Always 16)
+
+        :return: IceCube Supernova Payload ID
+        :rtype: int
+        """
         return SN_TYPE_ID
 
     @property
     def source_name(self):
+        """Name of IceCube Payload Source
+
+        :return: IceCube payload Source
+        :rtype: str
+        """
         return "Supernova Payload"
 
     @property
     def utime(self):
+        """UTC Timestamp of record since start of year in 0.1ns
+
+        :return: UTC Timestamp of record since start of year in 0.1ns
+        :rtype: int
+        """
         return self.__utime
 
 
 class PayloadReader(object):
-    "Read DAQ payloads from a file"
+    """Read DAQ payloads from a file"""
 
     def __init__(self, filename, keep_data=True):
-        """
-        Open a payload file
+        """Open a payload file
+
+        :param filename: Name of payload file
+        :type filename: str
+        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
+        :type keep_data: bool
         """
         if not os.path.exists(filename):
-            raise Exception("Cannot read \"%s\"" % filename)
+            raise Exception("Cannot read \"{0:s}\"".format(filename))
 
         if filename.endswith(".gz"):
             fin = gzip.open(filename, "rb")
@@ -123,21 +192,20 @@ class PayloadReader(object):
         self.__num_read = 0
 
     def __enter__(self):
-        """
-        Return this object as a context manager to used as
-        `with PayloadReader(filename) as payrdr:`
+        """Return this object as a context manager to used as `with PayloadReader(filename) as payrdr:`
         """
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
-        """
-        Close the open filehandle when the context manager exits
+        """Close the open filehandle when the context manager exits
         """
         self.close()
 
     def __iter__(self):
-        """
-        Generator which returns payloads in `for payload in payrdr:` loops
+        """Generator which returns payloads in `for payload in payrdr:` loops
+
+        :return: Payload or None if EOF reached
+        :rtype: SN_Payload or None
         """
         while True:
             if self.__fin is None:
@@ -154,14 +222,20 @@ class PayloadReader(object):
             yield pay
 
     def __next__(self):
-        "Read the next payload"
+        """Read the next payload
+
+        :return: pay
+        :rtype: SN_Payload
+        """
         pay = self.decode_payload(self.__fin, keep_data=self.__keep_data)
         self.__num_read += 1
         return pay
 
     def close(self):
-        """
-        Explicitly close the filehandle
+        """Explicitly close the filehandle
+
+        :return: None
+        :rtype: None
         """
         if self.__fin is not None:
             try:
@@ -172,25 +246,42 @@ class PayloadReader(object):
     @property
     def nrec(self):
         """Number of payloads read to this point
+
+        :return: self.__num_read
+        :rtype: int
         """
         return self.__num_read
 
     @property
     def filename(self):
         """Name of file being read
+
+        :return: self.__filename
+        :rtype: str
         """
         return self.__filename
 
     @classmethod
     def decode_payload(cls, stream, keep_data=True):
-        """Decode and return the next payload
+        """Decode and return the next payload.
+
+        :param stream: File object containing bytes open in read mode
+        :type stream: file
+        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
+        :type keep_data: bool
+        :return: Supernova Payload
+        :rtype: SN_Payload
         """
         envelope = stream.read(SN_ENVELOPE_LENGTH)
         if len(envelope) == 0:
             return None
 
+        # Read in payload envelope
         length, type_id, utime = struct.unpack(">iiq", envelope)
-
+        # > - big endian
+        # i - int (4 bytes) - payload length in bytes
+        # i - int (4 bytes) - payload type, should be 16
+        # q - long long (8 bytes) - UTC timestamp
         if length <= SN_ENVELOPE_LENGTH:
             rawdata = None
         else:
@@ -199,28 +290,18 @@ class PayloadReader(object):
         return SN_Payload(utime, rawdata, keep_data=keep_data)
 
 
-def read_file(filename, max_payloads, write_simple_hits=False):
-    if write_simple_hits and filename.startswith("HitSpool-"):
-        out = open("SimpleHit-" + filename[9:], "w")
-    else:
-        out = None
+def read_file(filename, max_payloads):
 
-    try:
-        with PayloadReader(filename) as rdr:
-            for pay in rdr:
-                if max_payloads is not None and rdr.nrec > max_payloads:
-                    break
+    with PayloadReader(filename) as rdr:
+        for pay in rdr:
+            if max_payloads is not None and rdr.nrec > max_payloads:
+                break
 
-                print(str(pay))
-                if out is not None:
-                    out.write(pay.simple_hit)
-    finally:
-        if out is not None:
-            out.close()
+            print(str(pay))
 
 
 if __name__ == "__main__":
-    read_file('../../scratch/data/sn-0.dat', 10)
+    read_file('./scratch/data/sn-0.dat', 10)
 
     # Data file is located at /home/sgriswold/sn-0.dat (04/10/2021)
     # Note, as written read_file will always start at the beginning of the file when called
