@@ -346,7 +346,7 @@ class PDAQ_PayloadReader(Reader):
 
 def read_file(filename, max_payloads):
 
-    with SN_PayloadReader(filename) as rdr:
+    with PDAQ_PayloadReader(filename) as rdr:
         for pay in rdr:
             if max_payloads is not None and rdr.nrec > max_payloads:
                 break
@@ -355,9 +355,10 @@ def read_file(filename, max_payloads):
 
 
 if __name__ == "__main__":
-    read_file('./scratch/data/sn-0.dat', 10)
+    # read_file('./scratch/data/sn-0.dat', 10)
+    read_file('./scratch/data/pDaqTriggers_7363.dat', 10)
 
-    # Data file is located at /home/sgriswold/sn-0.dat (04/10/2021)
+    # SN scaler data file is located at /home/sgriswold/sn-0.dat (04/10/2021)
     # Note, as written read_file will always start at the beginning of the file when called
     # Expected printed output as follows:
     # Supernova@278941064807639342[dom 9486d3ddbece clk 000000000000 scalerData*602
@@ -371,3 +372,17 @@ if __name__ == "__main__":
     # Supernova@278941064810867258[dom 86e958e3f2a0 clk 000000000000 scalerData*602
     # Supernova@278941064811162841[dom b6735e6efb7c clk 000000000000 scalerData*602
     # Supernova@278941064810867258[dom 86e958e3f2a0 clk 000000000000 scalerData*602
+
+    # PDAQ triggger data file is located at /home/sgriswold/
+    # Note, as written read_file will always start at the beginning of the file when called
+    # Expected printed output as follows
+    # (2021 - 03 - 25 19:41:47.372952433.900000, 12)
+    # (2021 - 03 - 25 19:41:47.372979677.600000, 9)
+    # (2021 - 03 - 25 19:41:47.373808624.700000, 38)
+    # (2021 - 03 - 25 19:41:47.373821121.200000, 10)
+    # (2021 - 03 - 25 19:41:47.374299206.700000, 14)
+    # (2021 - 03 - 25 19:41:47.375419587.800000, 11)
+    # (2021 - 03 - 25 19:41:47.376085355.500000, 15)
+    # (2021 - 03 - 25 19:41:47.378134810.600000, 24)
+    # (2021 - 03 - 25 19:41:47.379054445.200000, 37)
+    # (2021 - 03 - 25 19:41:47.379149937.500000, 76)
