@@ -3,6 +3,8 @@ import gzip
 import numbers
 import os
 import struct
+from datetime import datetime
+from sndaq.datetime_ns import datetime_ns
 
 SN_TYPE_ID = 16
 SN_ENVELOPE_LENGTH = 16
@@ -28,6 +30,8 @@ class Reader(object):
             fin = gzip.open(filename, "rb")
         elif filename.endswith(".bz2"):
             fin = bz2.BZ2File(filename)
+        elif filename.endswith(".dat"):
+            fin = open(filename, "r")
         else:
             fin = open(filename, "rb")
 
@@ -300,8 +304,44 @@ class SN_PayloadReader(Reader):
         return SN_Payload(utime, rawdata, keep_data=keep_data)
 
 
-class PDAQ_Payload(object):
-    pass
+class PDAQ_PayloadReader(Reader):
+    """Read PDAQ SMT8 Triggers from a file"""
+    def __init__(self, filename, keep_data=True):
+        super().__init__(filename, keep_data)
+
+    def __next__(self):
+        """Read the next payload
+
+        :return: payload
+        :rtype: PDAQ_Payload
+        """
+        trigger_time, trigger_rate = self.decode_payload(self._fin)
+        self._num_read += 1
+        return trigger_time, trigger_rate
+
+
+
+    @classmethod
+    def decode_payload(cls, stream, keep_data=True):
+        """Decode and return the next payload.
+
+        :param stream: File object containing bytes open in read mode
+        :type stream: file
+        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
+        :type keep_data: bool
+        :return: Supernova Payload
+        :rtype: SN_Payload
+        """
+        raw_data = stream.readline().split()
+        year, month, day = [int(x) for x in raw_data[0].split('-')]
+        hour, minute, sec = [int(float(x)) for x in raw_data[1].split(':')]
+        ns = int((float(raw_data[1].split(':')[2])-sec) * 1e10)/10
+        trigger_count = int(raw_data[2])
+        # return (PDAQ_Payload...)
+        if keep_data:  # This probably isn't necessary
+            return datetime_ns(datetime(year, month, day, hour, minute, sec), ns), trigger_count
+        else:
+            return datetime_ns(datetime(year, month, day, hour, minute, sec), ns)
 
 
 def read_file(filename, max_payloads):
