@@ -165,7 +165,7 @@ class SN_Payload(object):
         return self.__utime
 
 
-class PayloadReader(object):
+class SN_PayloadReader(object):
     """Read DAQ payloads from a file"""
 
     def __init__(self, filename, keep_data=True):
@@ -290,9 +290,11 @@ class PayloadReader(object):
         return SN_Payload(utime, rawdata, keep_data=keep_data)
 
 
+
+
 def read_file(filename, max_payloads):
 
-    with PayloadReader(filename) as rdr:
+    with SN_PayloadReader(filename) as rdr:
         for pay in rdr:
             if max_payloads is not None and rdr.nrec > max_payloads:
                 break
