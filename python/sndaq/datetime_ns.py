@@ -43,9 +43,9 @@ class datetime_ns:
         return datetime_ns(datetime(year, 1, 1) + delta, ns)
 
     def __repr__(self):
-        return '{0}-{1:02d}-{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:09f}'.format(
+        return '{0:}-{1:02d}-{2:02d} {3:02d}:{4:02d}:{5:02d}.{6:10d}'.format(
             self.datetime.year, self.datetime.month, self.datetime.day,
-            self.datetime.hour, self.datetime.minute, self.datetime.second, self.ns
+            self.datetime.hour, self.datetime.minute, self.datetime.second, int(self.ns*10)
         )
 
     def __add__(self, other):
