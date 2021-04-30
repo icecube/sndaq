@@ -10,6 +10,96 @@ SN_HEADER_LENGTH = 18
 SN_MAGIC_NUMBER = 300
 
 
+class Reader(object):
+    """Read payloads from a file"""
+
+    def __init__(self, filename, keep_data=True):
+        """Open a payload file
+
+        :param filename: Name of payload file
+        :type filename: str
+        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
+        :type keep_data: bool
+        """
+        if not os.path.exists(filename):
+            raise Exception("Cannot read \"{0:s}\"".format(filename))
+
+        if filename.endswith(".gz"):
+            fin = gzip.open(filename, "rb")
+        elif filename.endswith(".bz2"):
+            fin = bz2.BZ2File(filename)
+        else:
+            fin = open(filename, "rb")
+
+        self._filename = filename
+        self._fin = fin
+        self._keep_data = keep_data
+        self._num_read = 0
+
+    def __enter__(self):
+        """Return this object as a context manager to used as `with PayloadReader(filename) as payrdr:`
+        """
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Close the open filehandle when the context manager exits
+        """
+        self.close()
+
+    def __iter__(self):
+        """Generator which returns payloads in `for payload in payrdr:` loops
+
+        :return: Payload or None if EOF reached
+        :rtype: SN_Payload or None
+        """
+        while True:
+            if self._fin is None:
+                # generator has been explicitly closed
+                return
+
+            # decode the next payload
+            pay = next(self)
+            if pay is None:
+                # must have hit the end of the file
+                return
+
+            # return the next payload
+            yield pay
+
+    def __next__(self):
+        pass
+
+    def close(self):
+        """Explicitly close the filehandle
+
+        :return: None
+        :rtype: None
+        """
+        if self._fin is not None:
+            try:
+                self._fin.close()
+            finally:
+                self._fin = None
+
+    @property
+    def nrec(self):
+        """Number of payloads read to this point
+
+        :return: self.__num_read
+        :rtype: int
+        """
+        return self._num_read
+
+    @property
+    def filename(self):
+        """Name of file being read
+
+        :return: self.__filename
+        :rtype: str
+        """
+        return self._filename
+
+
 class SN_Payload(object):
 
     def __init__(self, utime, data, keep_data=True):
@@ -165,61 +255,11 @@ class SN_Payload(object):
         return self.__utime
 
 
-class SN_PayloadReader(object):
+class SN_PayloadReader(Reader):
     """Read DAQ payloads from a file"""
 
     def __init__(self, filename, keep_data=True):
-        """Open a payload file
-
-        :param filename: Name of payload file
-        :type filename: str
-        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
-        :type keep_data: bool
-        """
-        if not os.path.exists(filename):
-            raise Exception("Cannot read \"{0:s}\"".format(filename))
-
-        if filename.endswith(".gz"):
-            fin = gzip.open(filename, "rb")
-        elif filename.endswith(".bz2"):
-            fin = bz2.BZ2File(filename)
-        else:
-            fin = open(filename, "rb")
-
-        self.__filename = filename
-        self.__fin = fin
-        self.__keep_data = keep_data
-        self.__num_read = 0
-
-    def __enter__(self):
-        """Return this object as a context manager to used as `with PayloadReader(filename) as payrdr:`
-        """
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
-        """Close the open filehandle when the context manager exits
-        """
-        self.close()
-
-    def __iter__(self):
-        """Generator which returns payloads in `for payload in payrdr:` loops
-
-        :return: Payload or None if EOF reached
-        :rtype: SN_Payload or None
-        """
-        while True:
-            if self.__fin is None:
-                # generator has been explicitly closed
-                return
-
-            # decode the next payload
-            pay = next(self)
-            if pay is None:
-                # must have hit the end of the file
-                return
-
-            # return the next payload
-            yield pay
+        super().__init__(filename, keep_data)
 
     def __next__(self):
         """Read the next payload
@@ -227,39 +267,9 @@ class SN_PayloadReader(object):
         :return: pay
         :rtype: SN_Payload
         """
-        pay = self.decode_payload(self.__fin, keep_data=self.__keep_data)
-        self.__num_read += 1
+        pay = self.decode_payload(self._fin, keep_data=self._keep_data)
+        self._num_read += 1
         return pay
-
-    def close(self):
-        """Explicitly close the filehandle
-
-        :return: None
-        :rtype: None
-        """
-        if self.__fin is not None:
-            try:
-                self.__fin.close()
-            finally:
-                self.__fin = None
-
-    @property
-    def nrec(self):
-        """Number of payloads read to this point
-
-        :return: self.__num_read
-        :rtype: int
-        """
-        return self.__num_read
-
-    @property
-    def filename(self):
-        """Name of file being read
-
-        :return: self.__filename
-        :rtype: str
-        """
-        return self.__filename
 
     @classmethod
     def decode_payload(cls, stream, keep_data=True):
@@ -290,6 +300,8 @@ class SN_PayloadReader(object):
         return SN_Payload(utime, rawdata, keep_data=keep_data)
 
 
+class PDAQ_Payload(object):
+    pass
 
 
 def read_file(filename, max_payloads):
@@ -319,4 +331,3 @@ if __name__ == "__main__":
     # Supernova@278941064810867258[dom 86e958e3f2a0 clk 000000000000 scalerData*602
     # Supernova@278941064811162841[dom b6735e6efb7c clk 000000000000 scalerData*602
     # Supernova@278941064810867258[dom 86e958e3f2a0 clk 000000000000 scalerData*602
-
