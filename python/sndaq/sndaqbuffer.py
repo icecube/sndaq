@@ -11,11 +11,11 @@ class sndaqbuffer(ABC):
 
     @abstractmethod
     def append(self, entry):
-		...
+        pass
 
     @abstractmethod
     def clear(self):
-        ...
+        pass
 
     def __getitem__(self, key):
         return self.data[key]
@@ -23,7 +23,7 @@ class sndaqbuffer(ABC):
     @property
     @abstractmethod
     def data(self):
-        ...
+        pass
 
 
 class windowbuffer(sndaqbuffer):
