@@ -44,16 +44,15 @@ jobs:
           python setup.py install --user
 
       # Run the unit tests and generate coverage report
-      - name: Test with pytest
+      - name: Run unit tests and generate coverage report
         run: |
           pytest --cov-report xml:python/sndaq/tests/coverage.xml --cov=sndaq python/sndaq/tests/
 
-      - name: Run unit tests
+      - name: Publish coverage report
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
-          files: coverage.xml # optional
-          directory: python/sndaq/tests # optional
+          files: python/sndaq/tests/coverage.xml # optional
           name: PySNDAQ # optional
           fail_ci_if_error: true # optional (default = false)
           verbose: true # optional (default = false)
