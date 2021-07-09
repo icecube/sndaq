@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from sndaq.sndaqbuffer import windowbuffer
+from sndaq.buffer import windowbuffer
 
 
 class TestWindowBuffer(unittest.TestCase):
