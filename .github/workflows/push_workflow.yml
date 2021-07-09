@@ -1,14 +1,9 @@
-# This is a basic workflow to help you get started with Actions
-
-name: PySNDAQ Test Suite
+name: PySNDAQ Test Suite (Push)
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the main branch
+  # Triggers the workflow on push
   push:
-    branches: [ $default-branch ]
-  pull_request:
-    branches: [ $default-branch ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -43,16 +38,7 @@ jobs:
         run: |
           python setup.py install --user
 
-      # Run the unit tests and generate coverage report
-      - name: Run unit tests and generate coverage report
+      # Run the unit tests
+      - name: Run unit tests
         run: |
-          pytest --cov-report xml:python/sndaq/tests/coverage.xml --cov=sndaq python/sndaq/tests/
-
-      - name: Publish coverage report
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
-          files: python/sndaq/tests/coverage.xml # optional
-          name: PySNDAQ # optional
-          fail_ci_if_error: true # optional (default = false)
-          verbose: true # optional (default = false)
+          pytest
