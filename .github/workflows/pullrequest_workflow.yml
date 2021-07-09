@@ -44,9 +44,9 @@ jobs:
       # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
       - name: Run unit tests and generate coverage report
         run: |
-          pytest --cov-report term-missing --cov=sndaq python/sndaq/tests/ &> python/sndaq/tests/coverage/coverage.term
+          pytest --cov-report term-missing --cov=sndaq python/sndaq/tests/ &> python/sndaq/tests/coverage.term
           echo "coverage_report << EOF" >> $GITHUB_ENV
-          cat python/sndaq/tests/coverage/coverage.term >> $GITHUB_ENV
+          cat python/sndaq/tests/coverage.term >> $GITHUB_ENV
           echo 'EOF' >> $GITHUB_ENV
 
       - name: Report coverage on PR
