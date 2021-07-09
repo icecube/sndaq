@@ -51,15 +51,15 @@ jobs:
 
       - name: Report coverage on PR
         uses: actions/github-script@v3
-          with:
-            github-token: ${{secrets.GITHUB_TOKEN}}
-            script: |
-              github.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: '${{ env.coverage_report }}'
-              })
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            github.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '${{ env.coverage_report }}'
+            })
 
 #      - name: Publish coverage report
 #        uses: codecov/codecov-action@v1
