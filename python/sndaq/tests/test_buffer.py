@@ -17,8 +17,8 @@ class TestWindowBuffer(unittest.TestCase):
         size = 20
         ndom = 40
         buffer = windowbuffer(size=size, ndom=ndom)
-        self.assertEquals(buffer._size, size)
-        self.assertEquals(buffer.data.size, size*ndom)
+        self.assertEqual(buffer._size, size)
+        self.assertEqual(buffer.data.size, size*ndom)
 
     def test_get(self):
         # All zeros are expected
