@@ -4,7 +4,6 @@ name: PySNDAQ Test Suite (Pull Request)
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   pull_request:
-    branches: [ main ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -13,12 +12,13 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   build:
+    name: Build PySNDAQ and run unit tests
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     strategy:
       # Add a list of python versions we want to use for testing.
       matrix:
-        python-version: [3.6, 3.7, 3.8]
+        python-version: [3.6]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -44,28 +44,13 @@ jobs:
       # https://docs.github.com/en/actions/reference/workflow-commands-for-github-actions
       - name: Run unit tests and generate coverage report
         run: |
-          pytest --cov-report term-missing --cov=sndaq python/sndaq/tests/ &> python/sndaq/tests/coverage.term
-          echo "coverage_report << EOF" >> $GITHUB_ENV
-          cat python/sndaq/tests/coverage.term >> $GITHUB_ENV
-          echo 'EOF' >> $GITHUB_ENV
+          pytest --cov-report xml:python/sndaq/tests/coverage.xml --cov=sndaq python/sndaq/tests/
 
-      - name: Report coverage on PR
-        uses: actions/github-script@v3
+      - name: Publish coverage report
+        uses: codecov/codecov-action@v1
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            github.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: '${{ env.coverage_report }}'
-            })
-
-#      - name: Publish coverage report
-#        uses: codecov/codecov-action@v1
-#        with:
-#          token: ${{ secrets.CODECOV_TOKEN }} # not required for public repos
-#          files: python/sndaq/tests/coverage.xml # optional
-#          name: PySNDAQ # optional
-#          fail_ci_if_error: true # optional (default = false)
-#          verbose: true # optional (default = false)
+          token: ${{ secrets.CODECOV_TOKEN }} # required for private repos
+          files: python/sndaq/tests/coverage.xml
+          name: PySNDAQ
+          fail_ci_if_error: true # optional (default = false)
+          verbose: true # optional (default = false)
