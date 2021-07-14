@@ -1,0 +1,7 @@
+[report]
+exclude_lines =
+    # Re-enable standard pragma
+    pragma: no cover
+
+    # Exclude abstract class definitions from coverage
+    pass
