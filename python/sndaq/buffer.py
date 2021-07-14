@@ -17,8 +17,9 @@ class sndaqbuffer(ABC):
     def clear(self):
         pass
 
-    def __getitem__(self, key):
-        return self.data[key]
+    @abstractmethod
+    def __getitem__(self):
+        pass
 
     @property
     @abstractmethod
