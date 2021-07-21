@@ -4,14 +4,19 @@ from sndaq.buffer import windowbuffer
 
 class AnalysisConfig:
 
+    # IMPORTANT NOTE: Leading/trailing refers to time, buffer indices will be inversely prop to time
+    # TODO: Documentation (Figure) or fix to Buffer indexing needed
+    _raw_binsize = 2  # ms
     _base_binsize = 500  # ms
     _dur_leading_bg = 300  # ms
     _dur_trailing_bg = 300  # ms
     _dur_leading_excl = 15  # ms
     _dur_trailing_excl = 15e3  # ms
 
-    def __init__(self, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
+    def __init__(self, raw_binsize=None, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
         # TODO: Define these using ConfigParser
+        if raw_binsize is not None:
+            AnalysisConfig._raw_binsize = raw_binsize
         if base_binsize is not None:
             AnalysisConfig._base_binsize = base_binsize
         if dur_bgl is not None:
@@ -30,6 +35,10 @@ class AnalysisConfig:
         :rtype: int
         """
         return self.dur_leading_bg + self.dur_leading_excl + self.dur_trailing_bg + self.dur_trailing_excl
+
+    @property
+    def raw_binsize(self):
+        return self._raw_binsize
 
     @property
     def base_binsize(self):
@@ -58,22 +67,77 @@ class AnalysisHandler(AnalysisConfig):
         super().__init__()
 
         # Create shared window buffer
+        self._binnings = binnings
+        self._ndom = ndom
+        self._dtype = dtype
+
         # minimum size for bg, excl, search, and largest search offset
         size = ((self.duration_nosearch + 2*int(max(binnings))) / self.base_binsize) - 1
-        buffer = windowbuffer(size=size, ndom=ndom, dtype=dtype)
+        self.buffer_analysis = windowbuffer(size=size, ndom=ndom, dtype=dtype)
+        self._rebin_factor = int(self.base_binsize/self.raw_binsize)
+        self.buffer_raw = windowbuffer(size=size*self._rebin_factor, ndom=ndom, dtype=dtype)
 
         # Create analyses
         self.analyses = []
         for binning in np.asarray(binnings, dtype=dtype):
             for offset in np.arange(0, binning, 500, dtype=dtype):
+                idx = size - (self.duration_nosearch + offset + binning)/self.base_binsize
                 self.analyses.append(
-                    Analysis(binning, offset, idx=offset/self.base_binsize, ndom=ndom)
+                    Analysis(binning, offset, idx=idx, ndom=ndom)
                 )
+
+        # Define counter for accumulation used in rebinning from raw to base analysis
+        self._accum_count = self._rebin_factor
+        self._accum_data = np.zeros(ndom, dtype=dtype)
 
     def print_analyses(self):
         for i, analysis in enumerate(self.analyses):
             print(f'{i:d} {analysis.binsize*1e-3:4.1f} (+{analysis.offset*1e-3:4.1f})')
-        # Update analysis
+
+    def update_analyses(self, value):
+        for analysis in self.analyses:
+            self.update_sums(analysis, value)
+
+    def update_sums(self, analysis, value):
+        # Analysis sums are updated by the handler b/c the handler has access to buffers whereas analysis objects do not
+        # TODO: May want to add check eventually if asymmetric bg/excl window is used
+        analysis.hit_sum += self.buffer_analysis[analysis.idx_exl] + value
+        analysis.hit_sum -= self.buffer_analysis[analysis.idx_bgl] + self.buffer_analysis[analysis.idx_bgt]
+
+        analysis.hit_sum2 += self.buffer_analysis[analysis.idx_exl]**2 + value**2
+        analysis.hit_sum2 -= self.buffer_analysis[analysis.idx_bgl]**2 + self.buffer_analysis[analysis.idx_bgt]**2
+
+        analysis.rate += self.buffer_analysis[analysis.idx_ext]
+        analysis.rate -= self.buffer_analysis[analysis.idx_sw]
+
+    def accumulate(self, val):
+        # This could be it's own class/component, maybe use itertools? Maybe use a generator w/ yield?
+        self._accum_data += val
+        self._accum_count -= 1
+        return bool(self._accum_count)
+
+    def reset_accumulator(self):
+        self._accum_data = np.zeros(self._ndom, dtype=self._dtype)
+        # _ndom and _dtype could be removed if this was part of an accumulator object, defined during init.
+        self._accum_count = self._rebin_factor
+
+    def update(self, value):
+        """ Update raw buffer, analysis buffer, and analyses sums
+        :param value: 2ms data for each DOM at a particular timestamp
+        :type value: np.ndarray
+        :return: None
+        :rtype: None
+        """
+        self.buffer_raw.append(value)
+        if not self.accumulate(value):  # Accumulator indicates time to reset, as base analysis bin of data is ready
+            # There's almost certainly a better way to do this.
+            accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
+            self.reset_accumulator()
+            self.update_analyses(accumulated_data)
+            self.buffer_analysis.append(accumulated_data)
+
+    def check_for_trigger(self, threshold=8.4, corr_threshold=5.8):
+        raise NotImplementedError
 
 
 class Analysis(AnalysisConfig):
@@ -87,19 +151,19 @@ class Analysis(AnalysisConfig):
         self._rebinfactor = self._binsize / self.base_binsize
         self._ndom = ndom
 
-        # Indices for accessing data buffer, all other than idx_eof point to first column in respective region
+        # Indices for accessing data buffer, all point to first column in respective region
         self._idx_bgl = idx  # Leading background window
         self._idx_exl = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # Leading exclusion
         self._idx_sw = self._idx_exl + int(self.dur_leading_excl/self.base_binsize)  # Search window
         self._idx_ext = self._idx_sw + int(self._binsize/self.base_binsize)  # Trailing exclusion
-        self._idx_bgt = self._idx_ext + int(self.dur_trailing_excl/self.base_binsize)  # Trailing exclusion
-        self._idx_eof = self._idx_bgt + int(self.dur_trailing_bg/self.base_binsize)  # last column for this search
+        self._idx_bgt = self._idx_ext + int(self.dur_trailing_excl/self.base_binsize)  # Trailing background
 
         # Quantities used to construct trigger
-        self._hit_sum = np.zeros(self._ndom, dtype=dtype)
-        self._hit_sum2 = np.zeros(self._ndom, dtype=dtype)
-        self._rate = np.zeros(self._ndom, dtype=dtype)
-        self._eps = eps  # Relative efficiency  # TODO: Investigate shared memory so new instances aren't created
+        self.hit_sum = np.zeros(self._ndom, dtype=dtype)
+        self.hit_sum2 = np.zeros(self._ndom, dtype=dtype)
+        self.rate = np.zeros(self._ndom, dtype=dtype)
+        self.eps = eps  # Relative efficiency  # TODO: Investigate shared memory so new instances aren't created
+
 
     @property
     def signal(self):
@@ -176,16 +240,6 @@ class Analysis(AnalysisConfig):
         :rtype: int
         """
         return self._idx_bgt
-
-    @property
-    def idx_eof(self):
-        """ Index of last column in trailing background window
-        :return: _idx_eof
-        :rtype: int
-        """
-        return self.idx_eof
-
-
 
 
 class AnalysisBuffer:
