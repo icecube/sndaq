@@ -2,16 +2,60 @@ import numpy as np
 from sndaq.buffer import windowbuffer
 
 
-class Analysis:
+class AnalysisConfig:
 
-    # TODO: Define this from Config
-    base_binsize = 500  # ms
-    dur_leading_bg = 300  # ms
-    dur_trailing_bg = 300  # ms
-    dur_leading_excl = 15  # ms
-    dur_trailing_excl = 15e3  # ms
+    _base_binsize = 500  # ms
+    _dur_leading_bg = 300  # ms
+    _dur_trailing_bg = 300  # ms
+    _dur_leading_excl = 15  # ms
+    _dur_trailing_excl = 15e3  # ms
 
-    def __init__(self, binsize, offset, idx=0, ndom=5160, eps=np.ones(5160)):
+    def __init__(self, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
+        # TODO: Define these using ConfigParser
+        if base_binsize is not None:
+            AnalysisConfig._base_binsize = base_binsize
+        if dur_bgl is not None:
+            AnalysisConfig._dur_leading_bg = dur_bgl  # ms
+        if dur_bgt is not None:
+            AnalysisConfig._dur_trailing_bg = dur_bgt  # ms
+        if dur_exl is not None:
+            AnalysisConfig._dur_leading_excl = dur_exl  # ms
+        if dur_ext is not None:
+            AnalysisConfig._dur_trailing_excl = dur_ext  # ms
+
+    @property
+    def duration_nosearch(self):
+        """
+        :return: Duration of search window including background and exclusion blocks in ms
+        :rtype: int
+        """
+        return self.dur_leading_bg + self.dur_leading_excl + self.dur_trailing_bg + self.dur_trailing_excl
+
+    @property
+    def base_binsize(self):
+        return self._base_binsize
+
+    @property
+    def dur_leading_bg(self):
+        return self._dur_leading_bg
+
+    @property
+    def dur_trailing_bg(self):
+        return self._dur_trailing_bg
+
+    @property
+    def dur_leading_excl(self):
+        return self._dur_leading_excl
+
+    @property
+    def dur_trailing_excl(self):
+        return self._dur_trailing_excl
+
+
+class Analysis(AnalysisConfig):
+
+    def __init__(self, binsize, offset, idx=0, ndom=5160, eps=np.ones(5160), dtype=np.uint16):
+        super().__init__()
         if self.base_binsize % binsize:
             raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {self.base_binsize:d} ms')
         self._binsize = binsize  # ms
@@ -28,19 +72,46 @@ class Analysis:
         self._idx_eof = self._idx_bgt + int(self.dur_trailing_bg/self.base_binsize)  # last column for this search
 
         # Quantities used to construct trigger
-        self.hit_sum = np.zeros(self._ndom, dtype=np.uint16)
-        self.hit_sum2 = np.zeros(self._ndom, dtype=np.uint16)
-        self.rate = np.zeros(self._ndom, dtype=np.uint16)
-        self.eps = eps  # Relative efficiency  # TODO: Investigate shared memory so new instances aren't created
+        self._hit_sum = np.zeros(self._ndom, dtype=dtype)
+        self._hit_sum2 = np.zeros(self._ndom, dtype=dtype)
+        self._rate = np.zeros(self._ndom, dtype=dtype)
+        self._eps = eps  # Relative efficiency  # TODO: Investigate shared memory so new instances aren't created
+
+    @property
+    def signal(self):
+        # TODO: Implement this
+        raise NotImplementedError
+
+    @property
+    def mean(self):
+        # TODO: Implement this
+        raise NotImplementedError
+
+    @property
+    def std(self):
+        # TODO: Implement this
+        raise NotImplementedError
+
+    @property
+    def var(self):
+        # TODO: Implement this
+        raise NotImplementedError
+
+    @property
+    def binsize(self):
+        return self._binsize
+
+    @property
+    def offset(self):
+        return self._offset
 
     @property
     def duration(self):
         """
-        :return: Duration of search window including background and exclusion blocks in ms
+        :return: Duration of buffer including background, search window, and exclusion blocks in ms
         :rtype: int
         """
-        return (self.dur_leading_bg + self.dur_leading_excl + self._binsize +
-                self.dur_trailing_bg + self.dur_trailing_excl)
+        return self.duration_nosearch + self._binsize
 
     @property
     def idx_bgl(self):
