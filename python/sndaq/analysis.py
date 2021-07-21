@@ -4,6 +4,97 @@ from sndaq.buffer import windowbuffer
 
 class Analysis:
 
+    # TODO: Define this from Config
+    base_binsize = 500  # ms
+    dur_leading_bg = 300  # ms
+    dur_trailing_bg = 300  # ms
+    dur_leading_excl = 15  # ms
+    dur_trailing_excl = 15e3  # ms
+
+    def __init__(self, binsize, offset, idx=0, ndom=5160, eps=np.ones(5160)):
+        if self.base_binsize % binsize:
+            raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {self.base_binsize:d} ms')
+        self._binsize = binsize  # ms
+        self._offset = offset  # ms
+        self._rebinfactor = self._binsize / self.base_binsize
+        self._ndom = ndom
+
+        # Indices for accessing data buffer, all other than idx_eof point to first column in respective region
+        self._idx_bgl = idx  # Leading background window
+        self._idx_exl = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # Leading exclusion
+        self._idx_sw = self._idx_exl + int(self.dur_leading_excl/self.base_binsize)  # Search window
+        self._idx_ext = self._idx_sw + int(self._binsize/self.base_binsize)  # Trailing exclusion
+        self._idx_bgt = self._idx_ext + int(self.dur_trailing_excl/self.base_binsize)  # Trailing exclusion
+        self._idx_eof = self._idx_bgt + int(self.dur_trailing_bg/self.base_binsize)  # last column for this search
+
+        # Quantities used to construct trigger
+        self.hit_sum = np.zeros(self._ndom, dtype=np.uint16)
+        self.hit_sum2 = np.zeros(self._ndom, dtype=np.uint16)
+        self.rate = np.zeros(self._ndom, dtype=np.uint16)
+        self.eps = eps  # Relative efficiency  # TODO: Investigate shared memory so new instances aren't created
+
+    @property
+    def duration(self):
+        """
+        :return: Duration of search window including background and exclusion blocks in ms
+        :rtype: int
+        """
+        return (self.dur_leading_bg + self.dur_leading_excl + self._binsize +
+                self.dur_trailing_bg + self.dur_trailing_excl)
+
+    @property
+    def idx_bgl(self):
+        """ Index of first column in leading background search window
+        :return: _idx_bgl
+        :rtype: int
+        """
+        return self._idx_bgl
+
+    @property
+    def idx_exl(self):
+        """ Index of first column in leading exclusion window
+        :return: _idx_exl
+        :rtype: int
+        """
+        return self._idx_exl
+
+    @property
+    def idx_sw(self):
+        """ Index of first column in search window
+        :return: _idx_sw
+        :rtype: int
+        """
+        return self._idx_sw
+
+    @property
+    def idx_ext(self):
+        """ Index of first column in trailing exclusion window
+        :return: _idx_ext
+        :rtype: int
+        """
+        return self._idx_ext
+
+    @property
+    def idx_bgt(self):
+        """ Index of first column in trailing background window
+        :return: _idx_bgt
+        :rtype: int
+        """
+        return self._idx_bgt
+
+    @property
+    def idx_eof(self):
+        """ Index of last column in trailing background window
+        :return: _idx_eof
+        :rtype: int
+        """
+        return self.idx_eof
+
+
+
+
+class AnalysisBuffer:
+
     @property
     def _background(self):
         """
