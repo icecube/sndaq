@@ -52,6 +52,30 @@ class AnalysisConfig:
         return self._dur_trailing_excl
 
 
+class AnalysisHandler(AnalysisConfig):
+
+    def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, dtype=np.uint16):
+        super().__init__()
+
+        # Create shared window buffer
+        # minimum size for bg, excl, search, and largest search offset
+        size = ((self.duration_nosearch + 2*int(max(binnings))) / self.base_binsize) - 1
+        buffer = windowbuffer(size=size, ndom=ndom, dtype=dtype)
+
+        # Create analyses
+        self.analyses = []
+        for binning in np.asarray(binnings, dtype=dtype):
+            for offset in np.arange(0, binning, 500, dtype=dtype):
+                self.analyses.append(
+                    Analysis(binning, offset, idx=offset/self.base_binsize, ndom=ndom)
+                )
+
+    def print_analyses(self):
+        for i, analysis in enumerate(self.analyses):
+            print(f'{i:d} {analysis.binsize*1e-3:4.1f} (+{analysis.offset*1e-3:4.1f})')
+        # Update analysis
+
+
 class Analysis(AnalysisConfig):
 
     def __init__(self, binsize, offset, idx=0, ndom=5160, eps=np.ones(5160), dtype=np.uint16):
