@@ -102,8 +102,9 @@ class AnalysisHandler(AnalysisConfig):
     def update_analyses(self, value):
         for analysis in self.analyses:
             self.update_sums(analysis, value)
+            self.update_results(analysis)
 
-    def update_sums(self, analysis, value):
+    def update_sums(self, analysis: 'Analysis', value):
         # Analysis sums are updated by the handler b/c the handler has access to buffers whereas analysis objects do not
         # TODO: May want to add check eventually if asymmetric bg/excl window is used
         analysis.hit_sum += self.buffer_analysis[analysis.idx_exl] + value
@@ -114,6 +115,26 @@ class AnalysisHandler(AnalysisConfig):
 
         analysis.rate += self.buffer_analysis[analysis.idx_ext]
         analysis.rate -= self.buffer_analysis[analysis.idx_sw]
+
+    def update_results(self, analysis: 'Analysis'):
+        # Analysis results are updated by the handler as the analysis class (currently) is intended to be a container
+        #   The handler is intended to contain the algorithms
+        mean = analysis.mean()
+        var = analysis.var()
+        rate = analysis.rate
+        signal = rate - mean
+
+        sum_rate_dev = np.sum(signal * self.eps / var)
+        sum_inv_var = np.sum(self.eps**2 / var)
+        analysis.dmu = sum_rate_dev / sum_inv_var
+        analysis.var_dmu = 1. / sum_inv_var
+
+        # calc xi
+        analysis.xi = analysis.dmu / np.sqrt(analysis.var_dmu)
+
+        # calc chi2
+        # tmp = (signal*(1. - eps))**2 / (var + eps*abs(signal))
+        analysis.chi2 = np.sum((rate - (mean+self.eps*signal))**2 / (var + self.eps*abs(signal)))
 
     def accumulate(self, val):
         # This could be it's own class/component, maybe use itertools? Maybe use a generator w/ yield?
@@ -127,7 +148,7 @@ class AnalysisHandler(AnalysisConfig):
         self._accum_count = self._rebin_factor
 
     def update(self, value):
-        """ Update raw buffer, analysis buffer, and analyses sums
+        """ Update raw buffer, analysis buffer, analyses sums and analysis results
         :param value: 2ms data for each DOM at a particular timestamp
         :type value: np.ndarray
         :return: None
@@ -154,6 +175,7 @@ class Analysis(AnalysisConfig):
         self._binsize = binsize  # ms
         self._offset = offset  # ms
         self._rebinfactor = self._binsize / self.base_binsize
+        # TODO: Decide if ndom should always be 5160 or the number of doms in the current config
         self._ndom = ndom
 
         self._nbin_nosearch = self.duration_nosearch / self._binsize
@@ -187,23 +209,22 @@ class Analysis(AnalysisConfig):
 
     @property
     def signal(self):
-        # TODO: Implement this
-        raise NotImplementedError
+        return self.rate - self.mean
 
     @property
     def mean(self):
-        # TODO: Implement this
-        raise NotImplementedError
-
-    @property
-    def std(self):
-        # TODO: Implement this
-        raise NotImplementedError
+        # TODO: Unit test for float type!
+        return self.hit_sum / self.nbin_bg
 
     @property
     def var(self):
-        # TODO: Implement this
-        raise NotImplementedError
+        # TODO: Unit test for float type!
+        return (self.nbin_bg * self.hit_sum2 - self.hit_sum**2) / self.nbin_bg**2
+
+    @property
+    def std(self):
+        # TODO: Unit test for float type!
+        return np.sqrt(self.var)
 
     @property
     def binsize(self):
