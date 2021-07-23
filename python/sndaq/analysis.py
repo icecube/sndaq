@@ -63,12 +63,13 @@ class AnalysisConfig:
 
 class AnalysisHandler(AnalysisConfig):
 
-    def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, dtype=np.uint16):
+    def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, eps=np.ones(5160, dtype=float), dtype=np.uint16):
         super().__init__()
 
         # Create shared window buffer
         self._binnings = binnings
         self._ndom = ndom
+        self._eps = eps
         self._dtype = dtype
 
         # minimum size for bg, excl, search, and largest search offset
@@ -89,6 +90,10 @@ class AnalysisHandler(AnalysisConfig):
         # Define counter for accumulation used in rebinning from raw to base analysis
         self._accum_count = self._rebin_factor
         self._accum_data = np.zeros(ndom, dtype=dtype)
+
+    @property
+    def eps(self):
+        return self._eps
 
     def print_analyses(self):
         for i, analysis in enumerate(self.analyses):
@@ -142,7 +147,7 @@ class AnalysisHandler(AnalysisConfig):
 
 class Analysis(AnalysisConfig):
 
-    def __init__(self, binsize, offset, idx=0, ndom=5160, eps=np.ones(5160), dtype=np.uint16):
+    def __init__(self, binsize, offset, idx=0, ndom=5160, dtype=np.uint16):
         super().__init__()
         if self.base_binsize % binsize:
             raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {self.base_binsize:d} ms')
@@ -162,7 +167,12 @@ class Analysis(AnalysisConfig):
         self.hit_sum = np.zeros(self._ndom, dtype=dtype)
         self.hit_sum2 = np.zeros(self._ndom, dtype=dtype)
         self.rate = np.zeros(self._ndom, dtype=dtype)
-        self.eps = eps  # Relative efficiency  # TODO: Investigate shared memory so new instances aren't created
+
+        # Quantities used to evaluate trigger
+        self.dmu = 0.
+        self.var_dmu = 0.
+        self.xi = 0.
+        self.chi2 = 0.
 
 
     @property
