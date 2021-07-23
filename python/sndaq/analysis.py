@@ -73,16 +73,16 @@ class AnalysisHandler(AnalysisConfig):
         self._dtype = dtype
 
         # minimum size for bg, excl, search, and largest search offset
-        size = ((self.duration_nosearch + 2*int(max(binnings))) / self.base_binsize) - 1
-        self.buffer_analysis = windowbuffer(size=size, ndom=ndom, dtype=dtype)
+        self._size = ((self.duration_nosearch + 2*int(max(binnings))) / self.base_binsize) - 1
+        self.buffer_analysis = windowbuffer(size=self._size, ndom=ndom, dtype=dtype)
         self._rebin_factor = int(self.base_binsize/self.raw_binsize)
-        self.buffer_raw = windowbuffer(size=size*self._rebin_factor, ndom=ndom, dtype=dtype)
+        self.buffer_raw = windowbuffer(size=self._size*self._rebin_factor, ndom=ndom, dtype=dtype)
 
         # Create analyses
         self.analyses = []
         for binning in np.asarray(binnings, dtype=dtype):
             for offset in np.arange(0, binning, 500, dtype=dtype):
-                idx = size - (self.duration_nosearch + offset + binning)/self.base_binsize
+                idx = self._size - (self.duration_nosearch + offset + binning)/self.base_binsize
                 self.analyses.append(
                     Analysis(binning, offset, idx=idx, ndom=ndom)
                 )
@@ -156,6 +156,9 @@ class Analysis(AnalysisConfig):
         self._rebinfactor = self._binsize / self.base_binsize
         self._ndom = ndom
 
+        self._nbin_nosearch = self.duration_nosearch / self._binsize
+        self._nbin_background = (self._dur_leading_bg + self._dur_trailing_bg) / self._binsize
+
         # Indices for accessing data buffer, all point to first column in respective region
         self._idx_bgl = idx  # Leading background window
         self._idx_exl = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # Leading exclusion
@@ -174,6 +177,13 @@ class Analysis(AnalysisConfig):
         self.xi = 0.
         self.chi2 = 0.
 
+    @property
+    def nbin_nosearch(self):
+        return self._nbin_nosearch
+
+    @property
+    def nbin_bg(self):
+        return self._nbin_background
 
     @property
     def signal(self):
