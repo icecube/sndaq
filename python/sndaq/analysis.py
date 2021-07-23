@@ -91,6 +91,12 @@ class AnalysisHandler(AnalysisConfig):
         self._accum_count = self._rebin_factor
         self._accum_data = np.zeros(ndom, dtype=dtype)
 
+        # Define trigger handler
+        # TODO: Move to Alert Handler
+        self.trigger_pending = False
+        self.trigger_xi = 0.
+        self.triggered_analysis = None
+
     @property
     def eps(self):
         return self._eps
@@ -162,8 +168,22 @@ class AnalysisHandler(AnalysisConfig):
             self.update_analyses(accumulated_data)
             self.buffer_analysis.append(accumulated_data)
 
-    def check_for_trigger(self, threshold=8.4, corr_threshold=5.8):
-        raise NotImplementedError
+    # TODO: Move this to Alert handler
+    def check_for_triggers(self, threshold=8.4, corr_threshold=5.8):
+        # Probably out of intended scope for analysis object
+        xi = np.array((ana.xi for ana in self.analyses))
+        if np.any(xi > threshold):
+            if not self.trigger_pending:
+                self.trigger_pending = True
+
+            # Check for other triggers in other search windows
+            # TODO: Figure out how SNDAQ checks for triggers in other search windows
+            if xi.max > self.trigger_xi:
+                self.trigger_xi = xi.max
+                self.triggered_analysis = self.analyses[xi.argmax()]
+
+        # Issue alert (Definitely out of intended scope)
+        # Reset trigger state (Probably out of intended scope)
 
 
 class Analysis(AnalysisConfig):
