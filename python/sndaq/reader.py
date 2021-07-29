@@ -174,6 +174,10 @@ class SN_Payload(object):
         )
 
     @property
+    def dom_id(self) -> int:
+        return self.__dom_id
+
+    @property
     def domclock(self) -> int:
         """Number of DOM Clock cycles
 
@@ -229,6 +233,30 @@ class SN_Payload(object):
             return 0
         else:
             return len(self.__data)
+
+    @property
+    def scaler_bytes(self) -> Union[None, bytes]:
+        """Binary representation of scaler bytes
+
+        :return: binary representation of scaler data
+        :rtype: bytearray
+        """
+        if not self.has_data:
+            return None
+        else:
+            return self.__data[SN_HEADER_LENGTH:]
+
+    @property
+    def scaler_length(self) -> int:
+        """Number of scaler bytes
+
+        :return: number of scaler bytes
+        :rtype: int
+        """
+        if not self.has_data:
+            return 0
+        else:
+            return self.data_length - SN_HEADER_LENGTH
 
     @property
     def has_data(self) -> bool:
