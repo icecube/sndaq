@@ -19,7 +19,7 @@ SN_MAGIC_NUMBER = 300
 class Reader(object):
     """Read payloads from a file"""
 
-    def __init__(self, filename: str, keep_data: bool = True) -> None:
+    def __init__(self, filename: str, filetype: str, keep_data: bool = True) -> None:
         """Open a payload file
 
         :param filename: Name of payload file
@@ -34,7 +34,9 @@ class Reader(object):
             fin = gzip.open(filename, "rb")
         elif filename.endswith(".bz2"):
             fin = bz2.BZ2File(filename)
-        elif filename.endswith(".dat"):
+        elif filename.endswith(".dat") and filetype is 'sndata':
+            fin = open(filename, "rb")
+        elif filename.endswith(".dat") and filetype is 'pdaqtrigger':
             fin = open(filename, "r")
         else:
             fin = open(filename, "rb")
@@ -269,7 +271,7 @@ class SN_PayloadReader(Reader):
     """Read DAQ payloads from a file"""
 
     def __init__(self, filename: str, keep_data: bool = True) -> None:
-        super().__init__(filename, keep_data)
+        super().__init__(filename, filetype='sndata', keep_data=keep_data)
 
     def __next__(self) -> SN_Payload:
         """Read the next payload
@@ -314,7 +316,7 @@ class PDAQ_PayloadReader(Reader):
     """Read PDAQ SMT8 Triggers from a file"""
 
     def __init__(self, filename: str, keep_data: bool = True) -> None:
-        super().__init__(filename, keep_data)
+        super().__init__(filename, filetype='pdaqtrigger', keep_data=keep_data)
 
     def __next__(self) -> Union[Tuple[datetime_ns, int], datetime_ns]:
         """Read the next payload
