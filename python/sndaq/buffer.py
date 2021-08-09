@@ -18,7 +18,7 @@ class sndaqbuffer(ABC):
         pass
 
     @abstractmethod
-    def __getitem__(self):
+    def __getitem__(self, key):
         pass
 
     @property
