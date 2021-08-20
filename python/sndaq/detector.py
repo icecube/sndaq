@@ -27,3 +27,6 @@ class Detector:
         elif idx.size > 1:
             raise RuntimeError('Multiple matching DOM IDs found during lookup: {0}'.format(idx))
         return idx[0]
+
+    def isvalid_dom(self, dom_id):
+        return np.any(self._dom_id_sorted == dom_id)
