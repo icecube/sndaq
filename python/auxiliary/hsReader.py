@@ -1,19 +1,11 @@
 import bz2
 import gzip
-import numbers
 import os
 import struct
-from datetime import datetime
-from sndaq.datetime_ns import datetime_ns
 
-# Type annotations
-from typing import Tuple, Union, BinaryIO, TextIO, Type, Optional
-from types import TracebackType
-
-SN_TYPE_ID = 16
-SN_ENVELOPE_LENGTH = 16
-SN_HEADER_LENGTH = 18
-SN_MAGIC_NUMBER = 300
+HS_TYPE_ID = 3
+HS_ENVELOPE_LENGTH = 32
+HS_HEADER_LENGTH = 22
 
 
 class Reader(object):
@@ -24,7 +16,7 @@ class Reader(object):
 
         :param filename: Name of payload file
         :type filename: str
-        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
+        :param keep_data: If true, write waveform data to HS_payload, if false waveform data will be written as None
         :type keep_data: bool
         """
         if not os.path.exists(filename):
@@ -34,7 +26,7 @@ class Reader(object):
             fin = gzip.open(filename, "rb")
         elif filename.endswith(".bz2"):
             fin = bz2.BZ2File(filename)
-        elif filename.endswith(".dat") and filetype is 'sndata':
+        elif filename.endswith(".dat") and filetype in ['sndata', 'hitspool']:
             fin = open(filename, "rb")
         elif filename.endswith(".dat") and filetype is 'pdaqtrigger':
             fin = open(filename, "r")
@@ -51,9 +43,7 @@ class Reader(object):
         """
         return self
 
-    def __exit__(self, exc_type: Optional[Type[Exception]],
-                 exc_value: Optional[BaseException],
-                 traceback: Optional[TracebackType]) -> None:
+    def __exit__(self, exc_type, exc_value, traceback):
         """Close the open filehandle when the context manager exits
         """
         self.close()
@@ -62,7 +52,7 @@ class Reader(object):
         """Generator which returns payloads in `for payload in payrdr:` loops
 
         :return: Payload or None if EOF reached
-        :rtype: SN_Payload or None
+        :rtype: HS_payload or None
         """
         while True:
             if self._fin is None:
@@ -78,7 +68,7 @@ class Reader(object):
             # return the next payload
             yield pay
 
-    def __next__(self) -> ...:
+    def __next__(self):
         pass
 
     def close(self):
@@ -94,7 +84,7 @@ class Reader(object):
                 self._fin = None
 
     @property
-    def nrec(self) -> int:
+    def nrec(self):
         """Number of payloads read to this point
 
         :return: self.__num_read
@@ -103,7 +93,7 @@ class Reader(object):
         return self._num_read
 
     @property
-    def filename(self) -> str:
+    def filename(self):
         """Name of file being read
 
         :return: self.__filename
@@ -112,17 +102,20 @@ class Reader(object):
         return self._filename
 
 
-class SN_Payload(object):
+class HS_Payload(object):
 
-    def __init__(self, utime: int, data: bytes, keep_data: bool = True) -> None:
-        """Convert SN scaler record data bytes into payload object.
+    def __init__(self, utime, dom_id, data, keep_data=True):
+        """Convert HitSpool record data bytes into payload object.
         See PayloadReader.decode_payload() for full description of record format.
-        Assumes argument data contains 18 bytes of additional payload fields before scaler data begins.
+        Assumes argument data contains 38 bytes of additional payload fields before waveform data begins.
 
         :param utime: UTC timestamp from year start
         :type utime: int
 
-        :param data: SN record bytes
+        :param dom_id: DOM Motherboard ID number
+        :type dom_id: int
+
+        :param data: compressed waveform bytes
         :type data: bytearray
 
         :param keep_data: Switch to keep data (true) or skip (false)
@@ -139,59 +132,121 @@ class SN_Payload(object):
 
         if self.__has_data:
             # Read SN Payload fields from bytes.
-            scaler_len = len(data) - 18
-            flds = struct.unpack(">QHH6B{0:d}B".format(scaler_len), data)
+            waveform_len = len(data) - HS_HEADER_LENGTH
+            flds = struct.unpack(">3HQ2I{0:d}B".format(waveform_len), data)
             # > - Big endian
-            # Q  - integer (8 bytes) - DOM mainboard ID, flds[0]
-            # H  - integer (2 bytes) - record length in bytes (10+scaler_len), flds[1]
-            # H  - integer (2 bytes) - SN record MAGIC NUMBER, flds[2]
-            # 6B - 6 integers (1 byte each) - DOM Clock bytes, flds[3:9]
-            # {0:d}B - scaler_len integers (1 byte each) - scaler data, flds[9:]
+            # 3H - 3* integer (2 bytes each) - byte order, flds[0]; version, flds[1]; pedestal, flds[2]
+            # Q  - integer (8 bytes) - DOM Clock, flds[3]
+            # 2i - 2* integer (4 bytes each) - word1, flds[4]; word3, flds[5]
+            # {0:d}B - waveform_len integers (1 byte each) - waveform data, flds[6:]
+            self.__dom_id = dom_id
+            self.__byte_order = flds[0]
+            self.__version = flds[1]
+            self.__pedestal = flds[2]
+            self.__clock_bytes = flds[3]
+            self.__word1 = flds[4]
+            self.__word3 = flds[5]
+            self.__waveform_bytes = flds[6:]
 
-            self.__dom_id = flds[0]
-            self.__clock_bytes = flds[3:9]
-            self.__scaler_bytes = flds[9:]
-
-    @staticmethod  # Decorator allows this method to be called without initializing the object
-    def extract_clock_bytes(clock_bytes: Union[numbers.Number, list, tuple]) -> Tuple[int]:
-        if isinstance(clock_bytes, numbers.Number):
-            tmpbytes = []
-            for _ in range(6):
-                tmpbytes.insert(0, int(clock_bytes & 0xff))
-                clock_bytes >>= 8
-            return tuple(tmpbytes)
-
-        if isinstance(clock_bytes, list) or isinstance(clock_bytes, tuple):
-            if len(clock_bytes) != 6:
-                raise Exception(f"Expected 6 clock bytes, not {len(clock_bytes):d}")
-            return clock_bytes
-
-        raise Exception(f"Cannot convert {type(clock_bytes).__name__}")
-
-    def __str__(self) -> str:
-        return "Supernova@{0:d}[dom {1:012x} clk {2:012x} scalerData*{3:d}".format(
-            self.utime, self.__dom_id, self.domclock, len(self.__scaler_bytes)
+    def __str__(self):
+        return "HitSpool@{0:d}[dom {1:012x} clk {2:012x} waveformData*{3:d}]".format(
+            self.utime, self.__dom_id, self.domclock, len(self.__waveform_bytes)
         )
 
     @property
-    def dom_id(self) -> int:
+    def dom_id(self):
         return self.__dom_id
 
     @property
-    def domclock(self) -> int:
+    def domclock(self):
         """Number of DOM Clock cycles
 
         :return: number of DOM clock cycles
         :rtype: int
         """
-        val = 0
-        for byte in self.__clock_bytes:
-            val = (val << 8) + byte
-        return val
+        return self.__clock_bytes
 
     @property
-    def record_bytes(self) -> bytes:
-        """Binary representation of record, will only contain scaler data if keep_data = True
+    def byte_order(self):
+        return self.__byte_order
+
+    @property
+    def version(self):
+        return self.__version
+
+    @property
+    def pedestal(self):
+        return self.__pedestal
+
+    @property
+    def word1(self):
+        return self.__word1
+
+    @property
+    def word3(self):
+        return self.__word3
+
+    # word1 - See https://docushare.icecube.wisc.edu/dsweb/Get/Document-20568 for full description of format
+    @property
+    def hit_size(self):
+        return self.word1 & 0x7ff
+
+    @property
+    def atwd_chip(self):
+        return (self.word1 >> 11) & 0x1
+
+    @property
+    def atwd_size(self):
+        return (self.word1 >> 12) & 0x03
+
+    @property
+    def atwd_available(self):
+        return (self.word1 >> 14) & 0x1
+
+    @property
+    def fadc_available(self):
+        return (self.word1 >> 15) & 0x1
+
+    @property
+    def lc(self):
+        return (self.word1 >> 16) & 0x03
+
+    @property
+    def trigger_word(self):
+        return (self.word1 >> 18) & 0xfff
+
+    @property
+    def min_bias(self):
+        return (self.word1 >> 30) & 0x1
+
+    @property
+    def compression_flag(self):
+        return (self.word1 >> 31) & 0x1
+
+    # word3 - See https://docushare.icecube.wisc.edu/dsweb/Get/Document-20568 for full description of format
+    @property
+    def post_peak_count(self):
+        return self.word3 & 0x1FF
+
+    @property
+    def peak_count(self):
+        return (self.word3 >> 9) & 0x1FF
+
+    @property
+    def pre_peak_count(self):
+        return (self.word3 >> 18) & 0x1FF
+
+    @property
+    def peak_sample(self):
+        return (self.word3 >> 27) & 0xF
+
+    @property
+    def peak_range(self):
+        return (self.word3 >> 31) & 0x1
+
+    @property
+    def record_bytes(self):
+        """Binary representation of record, will only contain waveform data if keep_data = True
 
         :return: binary representation of record
         :rtype: bytes
@@ -202,16 +257,16 @@ class SN_Payload(object):
             return self.envelope + self.__data
 
     @property
-    def envelope(self) -> bytes:
+    def envelope(self):
         """Binary representation of record envelope
 
         :return: binary representation of envelope
         :rtype: bytes
         """
-        return struct.pack(">2IQ", self.data_length + SN_ENVELOPE_LENGTH, self.type_id, self.__utime)
+        return struct.pack(">2IQ8xQ", self.data_length + HS_ENVELOPE_LENGTH, self.type_id, self.dom_id, self.__utime)
 
     @property
-    def data_bytes(self) -> Union[None, bytes]:
+    def data_bytes(self):
         """Binary representation of record data (all fields other than envelope)
 
         :return: binary representation of record data
@@ -223,8 +278,8 @@ class SN_Payload(object):
             return self.__data
 
     @property
-    def data_length(self) -> int:
-        """Number of data bytes (number of scaler bytes + 18)
+    def data_length(self):
+        """Number of data bytes (number of waveform bytes + 18)
 
         :return: number of data bytes
         :rtype: int
@@ -235,34 +290,34 @@ class SN_Payload(object):
             return len(self.__data)
 
     @property
-    def scaler_bytes(self) -> Union[None, bytes]:
-        """Binary representation of scaler bytes
+    def waveform_bytes(self):
+        """Binary representation of waveform bytes
 
-        :return: binary representation of scaler data
+        :return: binary representation of waveform data
         :rtype: bytearray
         """
         if not self.has_data:
             return None
         else:
-            return self.__data[SN_HEADER_LENGTH:]
+            return self.__data[HS_HEADER_LENGTH:]
 
     @property
-    def scaler_length(self) -> int:
-        """Number of scaler bytes
+    def waveform_length(self) -> int:
+        """Number of waveform bytes
 
-        :return: number of scaler bytes
+        :return: number of waveform bytes
         :rtype: int
         """
         if not self.has_data:
             return 0
         else:
-            return self.data_length - SN_HEADER_LENGTH
+            return self.data_length - HS_HEADER_LENGTH
 
     @property
     def has_data(self) -> bool:
-        """Indicates if SN Payload contains SN scaler data (true) or not (false)
+        """Indicates if SN Payload contains SN waveform data (true) or not (false)
 
-        :return: indicates if SN payload contains SN scaler data
+        :return: indicates if SN payload contains SN waveform data
         :rtype: bool
         """
         return self.__has_data
@@ -271,10 +326,10 @@ class SN_Payload(object):
     def type_id(self) -> int:
         """IceCube Payload ID (Always 16)
 
-        :return: IceCube Supernova Payload ID
+        :return: IceCube HitSpool Payload ID
         :rtype: int
         """
-        return SN_TYPE_ID
+        return HS_TYPE_ID
 
     @property
     def source_name(self) -> str:
@@ -283,7 +338,7 @@ class SN_Payload(object):
         :return: IceCube payload Source
         :rtype: str
         """
-        return "Supernova Payload"
+        return "HitSpool Payload"
 
     @property
     def utime(self) -> int:
@@ -295,92 +350,55 @@ class SN_Payload(object):
         return self.__utime
 
 
-class SN_PayloadReader(Reader):
+class HS_PayloadReader(Reader):
     """Read DAQ payloads from a file"""
 
-    def __init__(self, filename: str, keep_data: bool = True) -> None:
-        super().__init__(filename, filetype='sndata', keep_data=keep_data)
+    def __init__(self, filename: str, keep_data=True):
+        super().__init__(filename, filetype='hitspool', keep_data=keep_data)
 
-    def __next__(self) -> SN_Payload:
+    def __next__(self):
         """Read the next payload
 
         :return: pay
-        :rtype: SN_Payload
+        :rtype: HS_payload
         """
         pay = self.decode_payload(self._fin, keep_data=self._keep_data)
         self._num_read += 1
         return pay
 
     @classmethod
-    def decode_payload(cls, stream: BinaryIO, keep_data: bool = True) -> Union[None, SN_Payload]:
+    def decode_payload(cls, stream, keep_data=True):
         """Decode and return the next payload.
 
         :param stream: File object containing bytes open in read mode
         :type stream: file
-        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
+        :param keep_data: If true, write waveform data to HS_payload, if false waveform data will be written as None
         :type keep_data: bool
-        :return: Supernova Payload
-        :rtype: SN_Payload
+        :return: HitSpool Payload
+        :rtype: HS_Payload
         """
-        envelope = stream.read(SN_ENVELOPE_LENGTH)
+        envelope = stream.read(HS_ENVELOPE_LENGTH)
         if len(envelope) == 0:
             return None
 
         # Read in payload envelope
-        length, type_id, utime = struct.unpack(">iiq", envelope)
+        length, type_id, dom_id, utime = struct.unpack(">2IQ8xQ", envelope)
         # > - big endian
         # i - int (4 bytes) - payload length in bytes
         # i - int (4 bytes) - payload type, should be 16
+        # q - long long (8 bytes) - DOM ID
+        # 8x - Get 8 pad bytes, gets unused (set to zero) bytes from payload
         # q - long long (8 bytes) - UTC timestamp
-        if length <= SN_ENVELOPE_LENGTH:
+        if length <= HS_ENVELOPE_LENGTH:
             rawdata = None
         else:
-            rawdata = stream.read(length - SN_ENVELOPE_LENGTH)
+            rawdata = stream.read(length - HS_ENVELOPE_LENGTH)
 
-        return SN_Payload(utime, rawdata, keep_data=keep_data)
-
-
-class PDAQ_PayloadReader(Reader):
-    """Read PDAQ SMT8 Triggers from a file"""
-
-    def __init__(self, filename: str, keep_data: bool = True) -> None:
-        super().__init__(filename, filetype='pdaqtrigger', keep_data=keep_data)
-
-    def __next__(self) -> Union[Tuple[datetime_ns, int], datetime_ns]:
-        """Read the next payload
-
-        :return: payload
-        :rtype: PDAQ_Payload
-        """
-        payload = self.decode_payload(self._fin)
-        self._num_read += 1
-        return payload
-
-    @classmethod
-    def decode_payload(cls, stream: TextIO, keep_data: bool = True) -> Union[Tuple[datetime_ns, int], datetime_ns]:
-        """Decode and return the next payload.
-
-        :param stream: File object containing bytes open in read mode
-        :type stream: TextIO
-        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
-        :type keep_data: bool
-        :return: pDAQ Trigger Payload
-        :rtype: datetime_ns, Tuple
-        """
-        raw_data = stream.readline().split()
-        year, month, day = [int(x) for x in raw_data[0].split('-')]
-        hour, minute, sec = [int(float(x)) for x in raw_data[1].split(':')]
-        ns = int((float(raw_data[1].split(':')[2]) - sec) * 1e10) / 10
-        trigger_count = int(raw_data[2])
-        # return (PDAQ_Payload...)
-        if keep_data:  # This probably isn't necessary
-            return datetime_ns(datetime(year, month, day, hour, minute, sec), ns), trigger_count
-        else:
-            return datetime_ns(datetime(year, month, day, hour, minute, sec), ns)
+        return HS_Payload(utime, dom_id, rawdata, keep_data=keep_data)
 
 
 def read_file(filename, max_payloads) -> None:
-    with PDAQ_PayloadReader(filename) as rdr:
+    with HS_PayloadReader(filename) as rdr:
         for pay in rdr:
             if max_payloads is not None and rdr.nrec > max_payloads:
                 break

@@ -25,14 +25,14 @@ class datetime_ns:
         return (self - year_start).to_ns
 
     @property
-    def to_hsutc(self):
-        """ As HitSpool utc_time timestamp (hs utc)
+    def to_utime(self):
+        """ As utc_time timestamp
         """
         return (self - year_start).to_ns * 10
 
     @staticmethod
-    def from_hsutc(utc_time, year=None):
-        """ Create datetime_ns from HitSpool utc_time using current year
+    def from_utime(utc_time, year=None):
+        """ Create datetime_ns from utc_time using current year
         """
         ns = int(utc_time % 1e10) // 10
         delta = timedelta(seconds=utc_time // 1e10)
@@ -105,7 +105,7 @@ class timedelta_ns:
         self.delta_ns = ns
 
     def __repr__(self):
-        return 'datetime_ns.timedelta_n(seconds={0}, ns={1})'.format(self.timedelta.total_seconds(), self.delta_ns)
+        return 'datetime_ns.timedelta_ns(seconds={0}, ns={1})'.format(self.timedelta.total_seconds(), self.delta_ns)
 
     @property
     def to_ns(self):
