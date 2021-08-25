@@ -47,7 +47,7 @@ class Reader(object):
         self._num_read = 0
 
     def __enter__(self):
-        """Return this object as a context manager to used as `with PayloadReader(filename) as payrdr:`
+        """Return this object as a context manager to used as `with SN_PayloadReader(filename) as rdr:`
         """
         return self
 

@@ -15,7 +15,7 @@ class Writer(object):
         :type filename: str
         """
         if not os.path.exists(filename) and not overwrite:
-            raise Exception("File \"{0:s}\" esits. Use kwarg \'overwite=True\' to force overwrite".format(filename))
+            raise Exception("File \"{0:s}\" exists. Use kwarg \'overwite=True\' to force overwrite".format(filename))
 
         if filename.endswith(".gz"):
             fout = gzip.open(filename, "wb")
@@ -31,7 +31,7 @@ class Writer(object):
         self._num_written = 0
 
     def __enter__(self):
-        """Return this object as a context manager to used as `with PayloadReader(filename) as payrdr:`
+        """Return this object as a context manager to used as `with SN_PayloadWriter(filename) as wrtr:`
         """
         return self
 
@@ -56,14 +56,14 @@ class Writer(object):
     def nrec(self) -> int:
         """Number of payloads written to this point
 
-        :return: self.__num_read
+        :return: self.__num_written
         :rtype: int
         """
         return self._num_written
 
     @property
     def filename(self) -> str:
-        """Name of file being read
+        """Name of file being written
 
         :return: self.__filename
         :rtype: str
@@ -102,7 +102,7 @@ def construct_payload(utime, dom_id, domclock, scalers, keep_data=True):
 
 
 class SN_PayloadWriter(Writer):
-    """Read DAQ payloads from a file"""
+    """Write DAQ payloads to a file"""
 
     def __init__(self, filename: str, overwrite=False):
         super().__init__(filename, overwrite)
