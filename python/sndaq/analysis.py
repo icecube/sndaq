@@ -82,7 +82,7 @@ class AnalysisHandler(AnalysisConfig):
         self.analyses = []
         for binning in np.asarray(binnings, dtype=dtype):
             for offset in np.arange(0, binning, 500, dtype=dtype):
-                idx = self._size - (self.duration_nosearch + offset + binning)/self.base_binsize
+                idx = int(self._size - (self.duration_nosearch + offset + binning)/self.base_binsize)
                 self.analyses.append(
                     Analysis(binning, offset, idx=idx, ndom=ndom)
                 )
@@ -92,6 +92,7 @@ class AnalysisHandler(AnalysisConfig):
         self._accum_data = np.zeros(ndom, dtype=dtype)
 
         # Define trigger handler
+        self._n = 0
         # TODO: Move to Alert Handler
         self.trigger_pending = False
         self.trigger_xi = 0.
@@ -108,7 +109,11 @@ class AnalysisHandler(AnalysisConfig):
     def update_analyses(self, value):
         for analysis in self.analyses:
             self.update_sums(analysis, value)
-            self.update_results(analysis)
+            if self.istriggerable(analysis):
+                self.update_results(analysis)
+
+    def istriggerable(self, analysis):
+        return self._n >= analysis.n_to_trigger
 
     def update_sums(self, analysis: 'Analysis', value):
         # Analysis sums are updated by the handler b/c the handler has access to buffers whereas analysis objects do not
@@ -165,6 +170,8 @@ class AnalysisHandler(AnalysisConfig):
             # There's almost certainly a better way to do this.
             accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
             self.reset_accumulator()
+            if not self.buffer_analysis.filled:
+                self._n += 1
             self.update_analyses(accumulated_data)
             self.buffer_analysis.append(accumulated_data)
 
@@ -202,6 +209,7 @@ class Analysis(AnalysisConfig):
         self._nbin_background = (self._dur_leading_bg + self._dur_trailing_bg) / self._binsize
 
         # Indices for accessing data buffer, all point to first column in respective region
+        # TODO: Check alignment so all start filling at the same time, looks like they may stop filling at same time
         self._idx_bgl = idx  # Leading background window
         self._idx_exl = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # Leading exclusion
         self._idx_sw = self._idx_exl + int(self.dur_leading_excl/self.base_binsize)  # Search window
@@ -218,6 +226,10 @@ class Analysis(AnalysisConfig):
         self.var_dmu = 0.
         self.xi = 0.
         self.chi2 = 0.
+
+        # Quantities used to evalaute when analysis is ready to issue triggers
+        # Assumes second BG window to be filled
+        self.n_to_trigger = self.idx_bgt + int(self.dur_trailing_bg / self.base_binsize)
 
     @property
     def nbin_nosearch(self):
