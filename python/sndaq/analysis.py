@@ -1,7 +1,5 @@
 import numpy as np
 from sndaq.buffer import windowbuffer
-from sndaq.reader import SN_PayloadReader
-from sndaq.detector import Detector
 
 
 class AnalysisConfig:
@@ -80,16 +78,6 @@ class AnalysisHandler(AnalysisConfig):
         self._rebin_factor = int(self.base_binsize/self.raw_binsize)
         self.buffer_raw = windowbuffer(size=self._size*self._rebin_factor, ndom=ndom, dtype=dtype)
 
-        # variables used for rebinning and staging 2ms data before adding to analysis buffer
-        self._staging_depth = 2000
-        self._staging_buffer = np.zeros((ndom, self._staging_depth), dtype=dtype)
-        self._raw_time = np.zeros(self._staging_depth, dtype=np.uint32)
-        self._raw_dt_utime = int(self.raw_binsize * 1e6)
-        self.payloads_read = np.zeros(5160, dtype=np.uint16)
-        self.current_sndata_file = None
-        self.payload = None
-        self._clock_cycle = int(250 * 2**16)
-
         # Create analyses
         self.analyses = []
         for binning in np.asarray(binnings, dtype=dtype):
@@ -102,9 +90,6 @@ class AnalysisHandler(AnalysisConfig):
         # Define counter for accumulation used in rebinning from raw to base analysis
         self._accum_count = self._rebin_factor
         self._accum_data = np.zeros(ndom, dtype=dtype)
-
-        # Define detector for reading
-        self.i3 = Detector('./data/full_dom_table.txt')
 
         # Define trigger handler
         # TODO: Move to Alert Handler
