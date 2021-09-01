@@ -8,10 +8,10 @@ class AnalysisConfig:
     # TODO: Documentation (Figure) or fix to Buffer indexing needed
     _raw_binsize = 2  # ms
     _base_binsize = 500  # ms
-    _dur_leading_bg = 300  # ms
-    _dur_trailing_bg = 300  # ms
-    _dur_leading_excl = 15  # ms
-    _dur_trailing_excl = 15e3  # ms
+    _dur_leading_bg = int(300e3)  # ms
+    _dur_trailing_bg = int(300e3)  # ms
+    _dur_leading_excl = int(15e3)  # ms
+    _dur_trailing_excl = int(15e3)  # ms
 
     def __init__(self, raw_binsize=None, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
         # TODO: Define these using ConfigParser
@@ -73,7 +73,7 @@ class AnalysisHandler(AnalysisConfig):
         self._dtype = dtype
 
         # minimum size for bg, excl, search, and largest search offset
-        self._size = ((self.duration_nosearch + 2*int(max(binnings))) / self.base_binsize) - 1
+        self._size = ((self.duration_nosearch + 2*int(max(binnings))) // self.base_binsize) - 1
         self.buffer_analysis = windowbuffer(size=self._size, ndom=ndom, dtype=dtype)
         self._rebin_factor = int(self.base_binsize/self.raw_binsize)
         self.buffer_raw = windowbuffer(size=self._size*self._rebin_factor, ndom=ndom, dtype=dtype)
@@ -96,69 +96,6 @@ class AnalysisHandler(AnalysisConfig):
         self.trigger_pending = False
         self.trigger_xi = 0.
         self.triggered_analysis = None
-
-    def run(self, n_scalers=1):
-        """Reads n_scalers from each DOM, rebins and writes to analysis buffer"""
-
-        with SN_PayloadReader(self.current_sndata_file) as rdr:
-            self.payload = next(rdr)
-            file_start_time = self.payload.utime
-            self._raw_time = np.arange(file_start_time,
-                                       file_start_time + self._raw_dt_utime * self._staging_depth,
-                                       self._raw_dt_utime)
-            while not self.i3.isvalid_dom(pay.dom_id):
-                pay = next(rdr)
-
-            row = self._process_scalers(pay.utime, pay.scaler_bytes)
-            idx_row = self.i3.get_dom_idx(pay.dom_id)
-            self._staging_buffer[idx_row] += row
-            self.payloads_read[idx_row] += 1
-
-            for i, pay in enumerate(rdr):
-                if self.i3.isvalid_dom(pay.dom_id):
-                    row = self._process_scalers(pay.utime, pay.scaler_bytes)
-                    idx_row = self.i3.get_dom_idx(pay.dom_id)
-                    self._staging_buffer[idx_row] += row
-                    self.payloads_read[idx_row] += 1
-
-                    if pay.utime > self._raw_time[0]:
-                        self.update(self._staging_buffer[:, 0])
-                        self._raw_time = np.roll(self._raw_time, -1)
-                        self._raw_time[-1] = self._raw_time[-2] + self._raw_dt_utime
-                        # Can this rolling operation be done with np.add.at(data[1:]-data[:-1], arange(1, data.size-1)?
-                        self._staging_buffer = np.roll(self._staging_buffer, -1, axis=1)
-                        self._staging_buffer[:, -1] = 0
-
-                if np.all(self.payloads_read >= n_scalers) or np.any(self.payloads_read >= 2):
-                    break
-
-    def _process_scalers(self, utime, scaler_bytes):
-        """time_bins is base (2ms) time bins
-            Could be changed to increment bin time as np.uint16 rather than thru array elements
-        """
-        scalers = np.frombuffer(scaler_bytes, dtype=np.uint8)
-        idx_sclr = scalers.nonzero()[0]
-        raw_counts = np.zeros(self._raw_time.size, dtype=np.uint8)
-        if idx_sclr.size == 0:
-            return raw_counts
-
-        t_sclr = utime + idx_sclr*self._clock_cycle
-        idx_raw = self._raw_time.searchsorted(t_sclr, side="left") - 1
-        np.add.at(raw_counts, idx_raw, scalers[idx_sclr])
-        # Duplicate entries in idx_base (when two 1.6ms bins have bin starts in same 2ms bin) must be added
-        # like so, not via base_counts[idx_base] += scalers[idx_sclr] which only performs addition for first idx
-        # idx_base
-
-        cut = (t_sclr + self._clock_cycle + self._raw_dt_utime > self._raw_time[idx_raw]) & \
-              (t_sclr < self._raw_time[idx_raw] + self._raw_dt_utime)
-        idx_raw = idx_raw[cut]
-        idx_sclr = idx_sclr[cut]
-
-        frac = 1. - ((self._raw_time[idx_raw] + self._raw_dt_utime - t_sclr[cut])/self._clock_cycle)
-        raw_counts[idx_raw] -= np.uint16(0.5+frac*scalers[idx_sclr])
-        raw_counts[idx_raw+1] += np.uint16(0.5+frac*scalers[idx_sclr])
-
-        return raw_counts
 
     @property
     def eps(self):
