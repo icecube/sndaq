@@ -130,8 +130,8 @@ class AnalysisHandler(AnalysisConfig):
     def update_results(self, analysis: 'Analysis'):
         # Analysis results are updated by the handler as the analysis class (currently) is intended to be a container
         #   The handler is intended to contain the algorithms
-        mean = analysis.mean()
-        var = analysis.var()
+        mean = analysis.mean
+        var = analysis.var
         rate = analysis.rate
         signal = rate - mean
 
@@ -197,7 +197,7 @@ class Analysis(AnalysisConfig):
 
     def __init__(self, binsize, offset, idx=0, ndom=5160, dtype=np.uint16):
         super().__init__()
-        if self.base_binsize % binsize:
+        if binsize % self.base_binsize:
             raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {self.base_binsize:d} ms')
         self._binsize = binsize  # ms
         self._offset = offset  # ms
@@ -227,7 +227,7 @@ class Analysis(AnalysisConfig):
         self.xi = 0.
         self.chi2 = 0.
 
-        # Quantities used to evalaute when analysis is ready to issue triggers
+        # Quantities used to evaluate when analysis is ready to issue triggers
         # Assumes second BG window to be filled
         self.n_to_trigger = self.idx_bgt + int(self.dur_trailing_bg / self.base_binsize)
 

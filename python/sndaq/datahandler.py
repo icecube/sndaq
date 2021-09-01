@@ -25,7 +25,7 @@ class DataHandler:
 
     @property
     def files(self):
-        return self._file_glob()
+        return self._file_glob
 
     def get_data_files(self, directory):
         self._file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat'))))  # May need to check sorting order
