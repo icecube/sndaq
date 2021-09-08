@@ -32,6 +32,7 @@ class windowbuffer(sndaqbuffer):
         super().__init__(size, ndom, dtype)
         self._mult = mult
         self._buflen = self._size*self._mult
+        self._n = 0
         self.clear()
 
     def append(self, entry):
@@ -39,6 +40,8 @@ class windowbuffer(sndaqbuffer):
             self._reset()
         self._data[self._idx, :] = entry
         self._idx += 1
+        if not self.filled:
+            self._n += 1
         return self
 
     def clear(self):
@@ -56,3 +59,11 @@ class windowbuffer(sndaqbuffer):
     @property
     def data(self):
         return self._data[self._idx-self._size:self._idx, :]
+
+    @property
+    def filled(self):
+        return self._n >= self._buflen
+
+    @property
+    def nscaler(self):
+        return self._n
