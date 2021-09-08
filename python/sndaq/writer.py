@@ -1,3 +1,5 @@
+"""Writer objects for SN scaler data
+"""
 import os
 import gzip
 import bz2
@@ -72,24 +74,32 @@ class Writer(object):
 
 
 def construct_payload(utime, dom_id, domclock, scalers, keep_data=True):
-    """Decode and return the next payload.
+    """Create a new SN_Payload
 
-    :param utime: UTC timestamp from year start
-    :type utime: int (8 bytes)
+    Parameters
+    ----------
+    utime : int (uint32)
+        UTC timestamp from year start
+    dom_id : int (uint32)
+        DOM Motherboard ID
+    domclock : int
+        Number of DOM clock cycles elapsed since DOM launch
+    scalers : array_like
+        SN scaler values
+    keep_data : bool
+        If True, construct a payload with all fields
+        If False, construct a payload header only
 
-    :param dom_id: DOM mainboard ID
-    :type dom_id: int (8 bytes)
+    Returns
+    -------
+    payload : sndaq.reader.SN_Payload
+        Custom SN scaler payload
 
-    :param domclock: DOM clock cycles elapsed since launch
-    :type domclock: int (6 bytes)
+    See Also
+    --------
+    sndaq.reader.SN_Payload
 
-    :param scalers: scaler record data
-    :type scalers: tuple(int (1 byte))
-
-    :param keep_data:  If true, write scaler data to SN_Payload, if false scaler data will be written as None
-    :type keep_data: bool
     """
-
     rawdata = struct.pack('>QHH6B{0:d}B'.format(len(scalers)), dom_id, len(scalers) + 10, SN_MAGIC_NUMBER,
                           *domclock.to_bytes(length=6, byteorder='big'), *scalers)
     # > - Big endian
@@ -102,10 +112,16 @@ def construct_payload(utime, dom_id, domclock, scalers, keep_data=True):
 
 
 class SN_PayloadWriter(Writer):
-    """Write DAQ payloads to a file"""
-
+    """Write SN scaler payloads from a file
+    """
     def __init__(self, filename: str, overwrite=False):
         super().__init__(filename, overwrite)
 
     def write(self, payload):
+        """Write a SN scaler payload to file
+
+        Parameters
+        ----------
+        payload : sndaq.payload.SN_Payload
+        """
         self._fout.write(payload.record_bytes)
