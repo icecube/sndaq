@@ -9,10 +9,6 @@ import struct
 from datetime import datetime
 from sndaq.datetime_ns import datetime_ns
 
-# Type annotations
-from typing import Tuple, Union, BinaryIO, TextIO, Type, Optional
-from types import TracebackType
-
 SN_TYPE_ID = 16
 SN_ENVELOPE_LENGTH = 16
 SN_HEADER_LENGTH = 18
@@ -25,10 +21,15 @@ class Reader(object):
     def __init__(self, filename, filetype, keep_data=True):
         """Open a payload file
 
-        :param filename: Name of payload file
-        :type filename: str
-        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
-        :type keep_data: bool
+        Parameters
+        ----------
+        filename : str
+            Name of payload file
+        filetype : str
+            Type of payload file used to determine file open mode in conjunction with file extension
+        keep_data : bool
+            If True, construct payloads with all fields
+            If False, construct payloads with headers only
         """
         if not os.path.exists(filename):
             raise Exception("Cannot read \"{0:s}\"".format(filename))
@@ -54,18 +55,18 @@ class Reader(object):
         """
         return self
 
-    def __exit__(self, exc_type: Optional[Type[Exception]],
-                 exc_value: Optional[BaseException],
-                 traceback: Optional[TracebackType]) -> None:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         """Close the open filehandle when the context manager exits
         """
         self.close()
 
     def __iter__(self):
-        """Generator which returns payloads in `for payload in payrdr:` loops
+        """Iterate through payloads of current file
 
-        :return: Payload or None if EOF reached
-        :rtype: SN_Payload or None
+        Returns
+        -------
+        Payload : SN_Payload | None
+            Payload read from file, or None if EOF has been reached.
         """
         while True:
             if self._fin is None:
@@ -87,8 +88,9 @@ class Reader(object):
     def close(self):
         """Explicitly close the filehandle
 
-        :return: None
-        :rtype: None
+        Returns
+        -------
+        None : None
         """
         if self._fin is not None:
             try:
@@ -97,20 +99,24 @@ class Reader(object):
                 self._fin = None
 
     @property
-    def nrec(self) -> int:
+    def nrec(self):
         """Number of payloads read to this point
 
-        :return: self.__num_read
-        :rtype: int
+        Returns
+        -------
+        num_read : int
+            Number of payloads that have been read from the current file
         """
         return self._num_read
 
     @property
-    def filename(self) -> str:
-        """Name of file being read
+    def filename(self):
+        """Name of current file
 
-        :return: self.__filename
-        :rtype: str
+        Returns
+        -------
+        filename : str
+            Name of current file
         """
         return self._filename
 
@@ -118,19 +124,20 @@ class Reader(object):
 class SN_Payload(object):
     """Reader object for SN scaler payloads
     """
-    def __init__(self, utime: int, data: bytes, keep_data: bool = True) -> None:
+    def __init__(self, utime, data, keep_data=True):
         """Convert SN scaler record data bytes into payload object.
         See PayloadReader.decode_payload() for full description of record format.
         Assumes argument data contains 18 bytes of additional payload fields before scaler data begins.
 
-        :param utime: UTC timestamp from year start
-        :type utime: int
-
-        :param data: SN record bytes
-        :type data: bytearray
-
-        :param keep_data: Switch to keep data (true) or skip (false)
-        :type keep_data: bool
+        Parameters
+        ----------
+        utime : int
+            Time of payload since start of year in units 0.1 ns
+        data : bytearray | bytes
+            Binary representation of payload data other than header information
+        keep_data : bool
+            If True, construct a payload with all fields
+            If False, construct a payload header only
         """
         self.__utime = utime
 
@@ -157,16 +164,18 @@ class SN_Payload(object):
             self.__scaler_bytes = flds[9:]
 
     @staticmethod  # Decorator allows this method to be called without initializing the object
-    def extract_clock_bytes(clock_bytes: Union[numbers.Number, list, tuple]) -> Tuple[int]:
-        """
+    def extract_clock_bytes(clock_bytes):
+        """Read 6-byte clock field
 
         Parameters
         ----------
-        clock_bytes :
+        clock_bytes : array_like
+            6 bytes used to construct the number of clock cycles since DOM activation
 
         Returns
         -------
-
+        domclock : int
+            Number of 25 ns clock cycles since DOM activation
         """
         if isinstance(clock_bytes, numbers.Number):
             tmpbytes = []
@@ -188,21 +197,24 @@ class SN_Payload(object):
         )
 
     @property
-    def dom_id(self) -> int:
-        """
+    def dom_id(self):
+        """DOM mainboard ID
 
         Returns
         -------
-
+        dom_id : int
+            DOM mainboard ID as base 10 integer
         """
         return self.__dom_id
 
     @property
-    def domclock(self) -> int:
+    def domclock(self):
         """Number of DOM Clock cycles
 
-        :return: number of DOM clock cycles
-        :rtype: int
+        Returns
+        -------
+        domclock : int
+            Number of 25 ns clock cycles since DOM activation
         """
         val = 0
         for byte in self.__clock_bytes:
@@ -210,11 +222,13 @@ class SN_Payload(object):
         return val
 
     @property
-    def record_bytes(self) -> bytes:
-        """Binary representation of record, will only contain scaler data if keep_data = True
+    def record_bytes(self):
+        """Binary representation of payload
 
-        :return: binary representation of record
-        :rtype: bytes
+        Returns
+        -------
+        record_bytes : bytearray
+            Binary representation of payload, will only contain scaler data if keep_data = True
         """
         if not self.has_data:
             return self.envelope
@@ -223,19 +237,24 @@ class SN_Payload(object):
 
     @property
     def envelope(self) -> bytes:
-        """Binary representation of record envelope
+        """Binary representation of payload envelope
 
-        :return: binary representation of envelope
-        :rtype: bytes
+        Returns
+        -------
+        envelope_bytes : bytearray
+             binary representation of payload envelope, containing only the payload size, type ID and utime
         """
         return struct.pack(">2IQ", self.data_length + SN_ENVELOPE_LENGTH, self.type_id, self.__utime)
 
     @property
-    def data_bytes(self) -> Union[None, bytes]:
-        """Binary representation of record data (all fields other than envelope)
+    def data_bytes(self):
+        """Binary representation of payload data
 
-        :return: binary representation of record data
-        :rtype: bytearray
+        Returns
+        -------
+        data_bytes : bytearray | None
+            Binary representation of payload data fields, all other than payload size, type ID and utime
+            If this payload was constructed with keep_data=False, this will return None
         """
         if not self.has_data:
             return None
@@ -243,11 +262,14 @@ class SN_Payload(object):
             return self.__data
 
     @property
-    def data_length(self) -> int:
-        """Number of data bytes (number of scaler bytes + 18)
+    def data_length(self):
+        """Number of data bytes
 
-        :return: number of data bytes
-        :rtype: int
+        Returns
+        -------
+        data_length : int
+            Number of data bytes in payload, this equals number of scaler bytes + 18
+         If this payload was constructed with keep_data=False, this will return 0
         """
         if not self.has_data:
             return 0
@@ -255,23 +277,29 @@ class SN_Payload(object):
             return len(self.__data)
 
     @property
-    def scaler_bytes(self) -> Union[None, bytes]:
-        """Binary representation of scaler bytes
+    def scaler_bytes(self):
+        """Number of scaler bytes
 
-        :return: binary representation of scaler data
-        :rtype: bytearray
-        """
+        Returns
+        -------
+        scaler_bytes : bytearray | None
+            Binary representation of payload scalers
+            If this payload was constructed with keep_data=False, this will return None
+         """
         if not self.has_data:
             return None
         else:
             return self.__data[SN_HEADER_LENGTH:]
 
     @property
-    def scaler_length(self) -> int:
-        """Number of scaler bytes
+    def scaler_length(self):
+        """Number of data bytes
 
-        :return: number of scaler bytes
-        :rtype: int
+        Returns
+        -------
+        scaler_length : int
+            Number of scaler bytes in payload
+            If this payload was constructed with keep_data=False, this will return 0
         """
         if not self.has_data:
             return 0
@@ -279,38 +307,47 @@ class SN_Payload(object):
             return self.data_length - SN_HEADER_LENGTH
 
     @property
-    def has_data(self) -> bool:
-        """Indicates if SN Payload contains SN scaler data (true) or not (false)
+    def has_data(self):
+        """Indicates if payload has Data
 
-        :return: indicates if SN payload contains SN scaler data
-        :rtype: bool
+        Returns
+        -------
+        has_data :
+            If True, payload was constructed with keep_data = True, and has data bytes
+            If False, payload was constructed with keep_data = False, and has only the envelope
         """
         return self.__has_data
 
     @property
-    def type_id(self) -> int:
-        """IceCube Payload ID (Always 16)
+    def type_id(self):
+        """IceCube Payload ID
 
-        :return: IceCube Supernova Payload ID
-        :rtype: int
+        Returns
+        -------
+        type_id : int
+            IceCube Supernova scaler payload ID, should always be 16
         """
         return SN_TYPE_ID
 
     @property
-    def source_name(self) -> str:
-        """Name of IceCube Payload Source
+    def source_name(self):
+        """IceCube Payload Source
 
-        :return: IceCube payload Source
-        :rtype: str
+        Returns
+        -------
+        source_id : str
+            Named IceCube payload Source, always "Supernova payload"
         """
         return "Supernova Payload"
 
     @property
-    def utime(self) -> int:
-        """UTC Timestamp of record since start of year in 0.1ns
+    def utime(self):
+        """Time of payload, in 0.1 ns
 
-        :return: UTC Timestamp of record since start of year in 0.1ns
-        :rtype: int
+        Returns
+        -------
+        utime : int
+            UTC Timestamp of payload in units 0.1 ns since start of year
         """
         return self.__utime
 
@@ -318,29 +355,54 @@ class SN_Payload(object):
 class SN_PayloadReader(Reader):
     """Read DAQ payloads from a file"""
 
-    def __init__(self, filename: str, keep_data: bool = True) -> None:
+    def __init__(self, filename, keep_data=True):
+        """Open a SN scaler payload file
+
+        Parameters
+        ----------
+        filename : str
+            Name of SN scaler payload file
+        keep_data : bool
+            If True, construct payloads with all fields
+            If False, construct payloads with headers only
+
+        Examples
+        --------
+        >>> with SN_PayloadReader(...) as rdr:
+        >>>     for payload in rdr:
+        >>>         print(payload)
+        >>>         break
+        Supernova@278941064807639342[dom 9486d3ddbece clk 000000000000 scalerData*602]
+        """
         super().__init__(filename, filetype='sndata', keep_data=keep_data)
 
-    def __next__(self) -> SN_Payload:
+    def __next__(self):
         """Read the next payload
 
-        :return: pay
-        :rtype: SN_Payload
+        Returns
+        -------
+        payload : sndaq.reader.SN_Payload
         """
         pay = self.decode_payload(self._fin, keep_data=self._keep_data)
         self._num_read += 1
         return pay
 
     @classmethod
-    def decode_payload(cls, stream: BinaryIO, keep_data: bool = True) -> Union[None, SN_Payload]:
-        """Decode and return the next payload.
+    def decode_payload(cls, stream, keep_data=True):
+        """Decode and return the next payload
 
-        :param stream: File object containing bytes open in read mode
-        :type stream: file
-        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
-        :type keep_data: bool
-        :return: Supernova Payload
-        :rtype: SN_Payload
+        Parameters
+        ----------
+        stream : BinaryIO
+            File object containing bytes open in read binary mode
+        keep_data : Bool
+            If true, construct payload with all fields
+            If false, construct a payload with header only.
+
+        Returns
+        -------
+        Payload : sndaq.reader.SN_Payload
+            SN scaler payload
         """
         envelope = stream.read(SN_ENVELOPE_LENGTH)
         if len(envelope) == 0:
@@ -363,11 +425,33 @@ class SN_PayloadReader(Reader):
 class PDAQ_PayloadReader(Reader):
     """Reader for PDAQ SMT8 trigger rate data"""
 
-    def __init__(self, filename: str, keep_data: bool = True) -> None:
+    def __init__(self, filename, keep_data=True):
+        """Open a PDAQ trigger rate data file
+
+        Parameters
+        ----------
+        filename : str
+            Name of PDAQ trigger rate file
+        keep_data :
+            If True, include trigger rate
+            If False, include timestamp only
+
+        Examples
+        --------
+        >>> with PDAQ_PayloadReader(...) as rdr:
+        >>>     for payload in rdr:
+        >>>         print(payload)
+        >>>         break
+        (2021 - 03 - 25 19:41:47.3729524339, 12)
+        """
         super().__init__(filename, filetype='pdaqtrigger', keep_data=keep_data)
 
-    def __next__(self) -> Union[Tuple[datetime_ns, int], datetime_ns]:
+    def __next__(self):
         """Read the next payload
+
+        Returns
+        --------
+        payload : sndaq.reader.PDAQ_Payload
 
         :return: payload
         :rtype: PDAQ_Payload
@@ -377,35 +461,35 @@ class PDAQ_PayloadReader(Reader):
         return payload
 
     @classmethod
-    def decode_payload(cls, stream: TextIO, keep_data: bool = True) -> Union[Tuple[datetime_ns, int], datetime_ns]:
-        """Decode and return the next payload.
+    def decode_payload(cls, stream, keep_data=True):
+        """Decode and return the next payload
 
-        :param stream: File object containing bytes open in read mode
-        :type stream: TextIO
-        :param keep_data: If true, write scaler data to SN_Payload, if false scaler data will be written as None
-        :type keep_data: bool
-        :return: pDAQ Trigger Payload
-        :rtype: datetime_ns, Tuple
+        Parameters
+        ----------
+        stream : file
+            File object containing PDAQ Trigger payloads open in read mode
+        keep_data :
+            If True, include trigger rate
+            If False, include timestamp only
+
+        Returns
+        -------
+        Payload : tuple, datetime_ns
+            If keep_data = True, returns tuple of trigger time and trigger rate
+            If keep_data = False, returns trigger timestamp only
+
         """
-        raw_data = stream.readline().split()
-        year, month, day = [int(x) for x in raw_data[0].split('-')]
-        hour, minute, sec = [int(float(x)) for x in raw_data[1].split(':')]
-        ns = int((float(raw_data[1].split(':')[2]) - sec) * 1e10) / 10
-        trigger_count = int(raw_data[2])
-        # return (PDAQ_Payload...)
-        if keep_data:  # This probably isn't necessary
-            return datetime_ns(datetime(year, month, day, hour, minute, sec), ns), trigger_count
-        else:
-            return datetime_ns(datetime(year, month, day, hour, minute, sec), ns)
 
 
-def read_file(filename, max_payloads) -> None:
-    """
+def read_file(filename, max_payloads):
+    """Read a fixed number of payloads from a file, and print them to std out
 
     Parameters
     ----------
-    filename :
-    max_payloads :
+    filename : str
+        Path to file containing payloads
+    max_payloads : int
+        Number of payloads to read
     """
     with PDAQ_PayloadReader(filename) as rdr:
         for pay in rdr:
