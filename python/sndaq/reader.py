@@ -126,7 +126,6 @@ class SN_Payload(object):
     """
     def __init__(self, utime, data, keep_data=True):
         """Convert SN scaler record data bytes into payload object.
-        See PayloadReader.decode_payload() for full description of record format.
         Assumes argument data contains 18 bytes of additional payload fields before scaler data begins.
 
         Parameters
@@ -269,7 +268,7 @@ class SN_Payload(object):
         -------
         data_length : int
             Number of data bytes in payload, this equals number of scaler bytes + 18
-         If this payload was constructed with keep_data=False, this will return 0
+        If this payload was constructed with keep_data=False, this will return 0
         """
         if not self.has_data:
             return 0

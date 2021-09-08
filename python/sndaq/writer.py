@@ -113,6 +113,11 @@ def construct_payload(utime, dom_id, domclock, scalers, keep_data=True):
 
 class SN_PayloadWriter(Writer):
     """Write SN scaler payloads from a file
+
+    Methods
+    -------
+    write:
+        Write a SN scaler payload to file
     """
     def __init__(self, filename: str, overwrite=False):
         super().__init__(filename, overwrite)

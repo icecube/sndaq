@@ -174,6 +174,7 @@ class timedelta_ns:
             Number of seconds in time difference (if float, minimal precision is us)
         ns :
             Number of nanoseconds in time difference
+
         Returns
         -------
         dt_ns : datetime_ns.timedelta_ns

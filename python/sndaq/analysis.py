@@ -128,6 +128,28 @@ class AnalysisConfig:
 
 class AnalysisHandler(AnalysisConfig):
     """Container for Analysis objects and functions for use in SNDAQ's SICO search algorithm.
+
+    Methods
+    -------
+    accumulate:
+        Accumulate 2 ms data into analysis bin size
+    check_for_triggers:
+        Check if any analysis meets the basic trigger condition.
+    istriggerable:
+        Indicates analysis is ready to trigger
+    print_analyses:
+        Print binsize and relative offset of all analysis objects
+    reset_accumulator:
+        Reset accumulator count to rebin_factor and accum_data to zeros
+    update:
+        Update raw buffer, analysis buffer, analyses sums and analysis results
+    update_analyses:
+        Update SICO sums and computed quantities for all analyses
+    update_results:
+        Update SICO analysis results
+    update_sums:
+        Update SICO analysis sums
+
     """
     def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, eps=np.ones(5160, dtype=float), dtype=np.uint16):
         """Create Analysis Handler
@@ -193,7 +215,7 @@ class AnalysisHandler(AnalysisConfig):
         return self._eps
 
     def print_analyses(self):
-        """Print binsize and relative offset of all Analysis object
+        """Print binsize and relative offset of all analysis objects
         """
         for i, analysis in enumerate(self.analyses):
             print(f'{i:d} {analysis.binsize*1e-3:4.1f} (+{analysis.offset*1e-3:4.1f})')
@@ -513,6 +535,7 @@ class Analysis(AnalysisConfig):
     @property
     def duration(self):
         """Duration of analysis window in ms
+
         Returns
         -------
         duration : int
