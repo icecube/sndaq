@@ -1,9 +1,12 @@
+"""Analysis objects for performing SNDAQ SICO analysis
+"""
 import numpy as np
 from sndaq.buffer import windowbuffer
 
 
 class AnalysisConfig:
-
+    """Configuration object used to configure SICO analysis objects
+    """
     # IMPORTANT NOTE: Leading/trailing refers to time, buffer indices will be inversely prop to time
     # TODO: Documentation (Figure) or fix to Buffer indexing needed
     _raw_binsize = 2  # ms
@@ -14,6 +17,23 @@ class AnalysisConfig:
     _dur_trailing_excl = int(15e3)  # ms
 
     def __init__(self, raw_binsize=None, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
+        """
+
+        Parameters
+        ----------
+        raw_binsize : int
+            Size of input scalar data time bins
+        base_binsize : int
+            Size of base analysis time bins in ms
+        dur_bgl :
+            Duration of leading background window in ms
+        dur_bgt :
+            Duration of trailing background window in ms
+        dur_exl :
+            Duration of leading exclusion window in ms
+        dur_ext :
+            Duration of trailing exclusion window in ms
+        """
         # TODO: Define these using ConfigParser
         if raw_binsize is not None:
             AnalysisConfig._raw_binsize = raw_binsize
@@ -30,40 +50,99 @@ class AnalysisConfig:
 
     @property
     def duration_nosearch(self):
-        """
-        :return: Duration of search window including background and exclusion blocks in ms
-        :rtype: int
+        """Duration of analysis window in ms, excluding search window
+
+        Returns
+        -------
+        duration : int
+            Duration of analysis window including background and exclusion blocks in ms
         """
         return self.dur_leading_bg + self.dur_leading_excl + self.dur_trailing_bg + self.dur_trailing_excl
 
     @property
     def raw_binsize(self):
+        """Input data binsize in ms
+
+        Returns
+        -------
+        binsize : int
+            Size of input scalar data time in ms
+        """
         return self._raw_binsize
 
     @property
     def base_binsize(self):
+        """Base analysis binsize in ms
+
+        Returns
+        -------
+        binsize: int
+            Size of base analysis time bins in ms
+        """
         return self._base_binsize
 
     @property
     def dur_leading_bg(self):
+        """Leading background duration in ms
+
+        Returns
+        -------
+        duration : int
+            Duration of leading background window in ms
+        """
         return self._dur_leading_bg
 
     @property
     def dur_trailing_bg(self):
+        """Trailing background duration in ms
+
+        Returns
+        -------
+        duration : int
+            Duration of trailing background window in ms
+        """
         return self._dur_trailing_bg
 
     @property
     def dur_leading_excl(self):
+        """Leading exclusion duration in ms
+
+        Returns
+        -------
+        duration : int
+            Duration of leading exclusion window in ms
+        """
         return self._dur_leading_excl
 
     @property
     def dur_trailing_excl(self):
+        """Leading exclusion duration in ms
+
+        Returns
+        -------
+        duration : int
+            Duration of trailing exclusion window in ms
+        """
         return self._dur_trailing_excl
 
 
 class AnalysisHandler(AnalysisConfig):
-
+    """Container for Analysis objects and functions for use in SNDAQ's SICO search algorithm.
+    """
     def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, eps=np.ones(5160, dtype=float), dtype=np.uint16):
+        """Create Analysis Handler
+
+        Parameters
+        ----------
+        binnings : array_like
+            Bin sizes to be used during SICO analysis
+        ndom : int
+            number of contributing DOMs
+        eps : numpy.ndarray
+            relative efficiency of contributing DOMs
+        dtype
+            Data type for SN scaler arrays
+        """
         super().__init__()
 
         # Create shared window buffer
@@ -100,22 +179,65 @@ class AnalysisHandler(AnalysisConfig):
 
     @property
     def eps(self):
+        """DOM Relative efficiency
+
+        Returns
+        -------
+        eps : numpy.ndarray
+            ndom-length array of floats describing relative efficiency of each DOM.
+
+        Notes
+        -----
+        It is assumed that the ordering of DOM in eps matches the order of DOMs in the data buffer
+        """
         return self._eps
 
     def print_analyses(self):
+        """Print binsize and relative offset of all Analysis object
+        """
         for i, analysis in enumerate(self.analyses):
             print(f'{i:d} {analysis.binsize*1e-3:4.1f} (+{analysis.offset*1e-3:4.1f})')
 
     def update_analyses(self, value):
+        """Update SICO sums and computed quantities for all analyses
+
+        Parameters
+        ----------
+        value : numpy.ndarray
+            ndom-length array of binned hits to be added to SICO analysis sums
+        """
         for analysis in self.analyses:
             self.update_sums(analysis, value)
             if self.istriggerable(analysis):
                 self.update_results(analysis)
 
     def istriggerable(self, analysis):
+        """Indicates analysis is ready to trigger
+
+        Parameters
+        ----------
+        analysis : sndaq.analysis.Analysis
+            Analysis object for which to check triggering status. An analysis will (currently) only issue triggers if
+            its background windows have filled with data.
+
+        Returns
+        -------
+        istriggerable : bool
+            If true, the background buffers have filled and analysis is issuing triggers.
+            If False, the background buffer have not yet filled.
+        """
         return self._n >= analysis.n_to_trigger
 
-    def update_sums(self, analysis: 'Analysis', value):
+    def update_sums(self, analysis, value):
+        """Update SICO analysis sums
+
+        Parameters
+        ----------
+        analysis : sndaq.analysis.Analysis
+            Analysis object for which to update sums
+        value : numpy.ndarray
+            ndom-length array of binned hits to be added to SICO analysis sums
+        """
         # Analysis sums are updated by the handler b/c the handler has access to buffers whereas analysis objects do not
         # TODO: May want to add check eventually if asymmetric bg/excl window is used
         analysis.hit_sum += self.buffer_analysis[analysis.idx_exl] + value
@@ -127,7 +249,14 @@ class AnalysisHandler(AnalysisConfig):
         analysis.rate += self.buffer_analysis[analysis.idx_ext]
         analysis.rate -= self.buffer_analysis[analysis.idx_sw]
 
-    def update_results(self, analysis: 'Analysis'):
+    def update_results(self, analysis):
+        """Update SICO analysis results
+
+        Parameters
+        ----------
+        analysis : sndaq.analysis.Analysis
+            Analysis object for which to update quantities computed from sums
+        """
         # Analysis results are updated by the handler as the analysis class (currently) is intended to be a container
         #   The handler is intended to contain the algorithms
         mean = analysis.mean
@@ -148,22 +277,55 @@ class AnalysisHandler(AnalysisConfig):
         analysis.chi2 = np.sum((rate - (mean+self.eps*signal))**2 / (var + self.eps*abs(signal)))
 
     def accumulate(self, val):
+        """Accumulate 2 ms data into analysis binsize
+
+        Parameters
+        ----------
+        val : numpy.ndarray
+            ndom-length array of 2 ms scaler hits to be accumulated into higher order binnings.
+
+        Returns
+        -------
+        continue_accum : bool
+            Indicates that accumulation should continue. When false, an analysis' binsize worth of 2ms data has
+            accumulated and is ready to be written to file.
+
+        Notes
+        -----
+        When this function returns false, it is expected that reset_accumulator will be called before this function is
+        called again.
+
+        See Also
+        --------
+        sndaq.analysis.reset_accumulator
+        """
         # This could be it's own class/component, maybe use itertools? Maybe use a generator w/ yield?
         self._accum_data += val
         self._accum_count -= 1
         return bool(self._accum_count)
 
     def reset_accumulator(self):
+        """Reset accumulator count to rebin_factor and accum_data to zeros
+
+        Notes
+        -----
+        This function is expected to be called as soon as an analysis' binsize worth of 2ms data has accumulated
+
+        See Also
+        --------
+        sndaq.analysis.accumulate
+        """
         self._accum_data = np.zeros(self._ndom, dtype=self._dtype)
         # _ndom and _dtype could be removed if this was part of an accumulator object, defined during init.
         self._accum_count = self._rebin_factor
 
     def update(self, value):
-        """ Update raw buffer, analysis buffer, analyses sums and analysis results
-        :param value: 2ms data for each DOM at a particular timestamp
-        :type value: np.ndarray
-        :return: None
-        :rtype: None
+        """Update raw buffer, analysis buffer, analyses sums and analysis results
+
+        Parameters
+        ----------
+        value : numpy.ndarray
+            2ms data for each DOM at a particular timestamp
         """
         self.buffer_raw.append(value)
         if not self.accumulate(value):  # Accumulator indicates time to reset, as base analysis bin of data is ready
@@ -177,9 +339,18 @@ class AnalysisHandler(AnalysisConfig):
 
     # TODO: Move this to Alert handler
     def check_for_triggers(self, threshold=8.4, corr_threshold=5.8):
+        """Check if any analysis meets the basic trigger condition.
+
+        Parameters
+        ----------
+        threshold : float
+            Uncorrected xi threshold for issuing a SN trigger alert
+        corr_threshold : float
+            Corrected xi threshold for issuing a SN trigger alert
+        """
         # Probably out of intended scope for analysis object
         xi = np.array((ana.xi for ana in self.analyses))
-        if np.any(xi > threshold):
+        if np.any(xi > threshold) or np.any(xi > corr_threshold):
             if not self.trigger_pending:
                 self.trigger_pending = True
 
@@ -194,8 +365,25 @@ class AnalysisHandler(AnalysisConfig):
 
 
 class Analysis(AnalysisConfig):
+    """Descriptor object to handle data access and algorithms for SNDAQ sico-analysis
 
+    """
     def __init__(self, binsize, offset, idx=0, ndom=5160, dtype=np.uint16):
+        """Create Analysis object
+
+        Parameters
+        ----------
+        binsize : int
+            Time size of bins in signal rate and background rate calculation
+        offset : int
+            Time offset of analysis window in ms
+        idx : int
+            Starting index in analysis buffer, includes time offset
+        ndom : int
+            Number of DOMs contributing to the analysis
+        dtype
+            Data type for SN scaler arrays
+        """
         super().__init__()
         if binsize % self.base_binsize:
             raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {self.base_binsize:d} ms')
@@ -233,83 +421,156 @@ class Analysis(AnalysisConfig):
 
     @property
     def nbin_nosearch(self):
+        """Number of background and exclusion bins
+
+        Returns
+        -------
+        nbin_nosearch : int
+            Number of time bins within both background and exclusions windows (All bins other than search window)
+        """
         return self._nbin_nosearch
 
     @property
     def nbin_bg(self):
+        """Number of background bins
+
+        Returns
+        -------
+        nbin_background : int
+            Number of time bins within both background windows
+        """
         return self._nbin_background
 
     @property
     def signal(self):
+        """Signal rate
+
+        Returns
+        -------
+        signal : np.ndarray(float)
+            Deviation of rate in search window from mean background rate
+        """
         return self.rate - self.mean
 
     @property
     def mean(self):
+        """Background rate mean
+
+        Returns
+        -------
+        mean : float
+            Mean of background hit rate per bin measured across both background windows
+        """
         # TODO: Unit test for float type!
         return self.hit_sum / self.nbin_bg
 
     @property
     def var(self):
+        """Background rate variance
+
+        Returns
+        -------
+        variance : float
+            Variance of background hit rate per bin measured across both background windows
+        """
         # TODO: Unit test for float type!
         return (self.nbin_bg * self.hit_sum2 - self.hit_sum**2) / self.nbin_bg**2
 
     @property
     def std(self):
+        """Background rate standard deviation
+
+        Returns
+        -------
+        std : float
+            Standard deviation of background hit rate pre bin measured across both background windows
+        """
         # TODO: Unit test for float type!
         return np.sqrt(self.var)
 
     @property
     def binsize(self):
+        """Analysis binsize in ms
+
+        Returns
+        -------
+        _binsize : int
+            Size of analysis bins in search and background window
+        """
         return self._binsize
 
     @property
     def offset(self):
+        """Analysis window offset in ms
+
+        Returns
+        -------
+        _offset : int
+            Time offset of analysis window in ms, by default in increments of 500 ms
+        """
         return self._offset
 
     @property
     def duration(self):
-        """
-        :return: Duration of buffer including background, search window, and exclusion blocks in ms
-        :rtype: int
+        """Duration of analysis window in ms
+        Returns
+        -------
+        duration : int
+            Duration of analysis window in ms, comprised of background, exclusion, and search window
         """
         return self.duration_nosearch + self._binsize
 
     @property
     def idx_bgl(self):
-        """ Index of first column in leading background search window
-        :return: _idx_bgl
-        :rtype: int
+        """Leading background window index
+
+        Returns
+        -------
+        _idx_bgl : int
+            Index of first column in leading background window
         """
         return self._idx_bgl
 
     @property
     def idx_exl(self):
-        """ Index of first column in leading exclusion window
-        :return: _idx_exl
-        :rtype: int
+        """Leading exclusion window index
+
+        Returns
+        -------
+        _idx_exl : int
+            Index of first column in leading exclusion window
         """
         return self._idx_exl
 
     @property
     def idx_sw(self):
-        """ Index of first column in search window
-        :return: _idx_sw
-        :rtype: int
+        """Search window index
+
+        Returns
+        -------
+        _idx_sw : int
+            Index of first column in search window
         """
         return self._idx_sw
 
     @property
     def idx_ext(self):
-        """ Index of first column in trailing exclusion window
-        :return: _idx_ext
-        :rtype: int
+        """Trailing exclusion window index
+
+        Returns
+        -------
+        _idx_ext : int
+            Index of first column in trailing exclusion window
         """
         return self._idx_ext
 
     @property
     def idx_bgt(self):
-        """ Index of first column in trailing background window
-        :return: _idx_bgt
-        :rtype: int
+        """Trailing background window index
+
+        Returns
+        -------
+        _idx_bgt
+        Index of first column in trailing background window
         """
         return self._idx_bgt
