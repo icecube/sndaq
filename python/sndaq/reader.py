@@ -1,3 +1,6 @@
+"""Reader objects for SN scaler data and pdaq muon data
+"""
+
 import bz2
 import gzip
 import numbers
@@ -17,9 +20,9 @@ SN_MAGIC_NUMBER = 300
 
 
 class Reader(object):
-    """Read payloads from a file"""
-
-    def __init__(self, filename: str, filetype: str, keep_data: bool = True) -> None:
+    """Reader object for SN data
+    """
+    def __init__(self, filename, filetype, keep_data=True):
         """Open a payload file
 
         :param filename: Name of payload file
@@ -113,7 +116,8 @@ class Reader(object):
 
 
 class SN_Payload(object):
-
+    """Reader object for SN scaler payloads
+    """
     def __init__(self, utime: int, data: bytes, keep_data: bool = True) -> None:
         """Convert SN scaler record data bytes into payload object.
         See PayloadReader.decode_payload() for full description of record format.
@@ -154,6 +158,16 @@ class SN_Payload(object):
 
     @staticmethod  # Decorator allows this method to be called without initializing the object
     def extract_clock_bytes(clock_bytes: Union[numbers.Number, list, tuple]) -> Tuple[int]:
+        """
+
+        Parameters
+        ----------
+        clock_bytes :
+
+        Returns
+        -------
+
+        """
         if isinstance(clock_bytes, numbers.Number):
             tmpbytes = []
             for _ in range(6):
@@ -175,6 +189,12 @@ class SN_Payload(object):
 
     @property
     def dom_id(self) -> int:
+        """
+
+        Returns
+        -------
+
+        """
         return self.__dom_id
 
     @property
@@ -341,7 +361,7 @@ class SN_PayloadReader(Reader):
 
 
 class PDAQ_PayloadReader(Reader):
-    """Read PDAQ SMT8 Triggers from a file"""
+    """Reader for PDAQ SMT8 trigger rate data"""
 
     def __init__(self, filename: str, keep_data: bool = True) -> None:
         super().__init__(filename, filetype='pdaqtrigger', keep_data=keep_data)
@@ -380,6 +400,13 @@ class PDAQ_PayloadReader(Reader):
 
 
 def read_file(filename, max_payloads) -> None:
+    """
+
+    Parameters
+    ----------
+    filename :
+    max_payloads :
+    """
     with PDAQ_PayloadReader(filename) as rdr:
         for pay in rdr:
             if max_payloads is not None and rdr.nrec > max_payloads:
