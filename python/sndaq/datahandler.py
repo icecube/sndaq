@@ -73,7 +73,7 @@ class DataHandler:
         # like so, not via base_counts[idx_base] += scalers[idx_sclr] which only performs addition for first idx
         # idx_base
 
-        cut = (scaler_utime + self._scaler_udt + self._raw_udt > self._raw_utime[idx_raw]) & \
+        cut = (scaler_utime + self._scaler_udt > self._raw_utime[idx_raw] + self._raw_udt) & \
               (scaler_utime < self._raw_utime[idx_raw] + self._raw_udt)
         idx_raw = idx_raw[cut]
         idx_sclr = idx_sclr[cut]
