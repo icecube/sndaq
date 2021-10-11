@@ -1,6 +1,7 @@
 import numpy as np
 import glob
 from sndaq.reader import SN_PayloadReader
+from sndaq.buffer import stagingbuffer
 
 
 class DataHandler:
@@ -14,7 +15,7 @@ class DataHandler:
         self._staging_depth = 2000
         self._payloads_read = np.zeros(5160, dtype=np.uint32)
 
-        self._data = np.zeros((ndom, self._staging_depth), dtype=dtype)
+        self._data = stagingbuffer(size=self._staging_depth, ndom=ndom, dtype=dtype)  #np.zeros((ndom, self._staging_depth), dtype=dtype)
         self._raw_utime = np.zeros(self._staging_depth, dtype=np.uint32)
 
         self._file = None
@@ -46,10 +47,9 @@ class DataHandler:
         return self._data[:, 0]
 
     def advance_buffer(self):
-        self._raw_utime += self._raw_udt
+        self._raw_utime += self._raw_udt  # TODO: Decide if this could instead be tracked as integer of first bin utime
         # Can this rolling operation be done with np.add.at(data[1:]-data[:-1], arange(1, data.size-1)?
-        self._data = np.roll(self._data, -1, axis=1)
-        self._data[:, -1] = 0
+        self._data.advance()
 
     def update_buffer(self, idx_dom):
         data, idx_data = self.rebin_scalers(self._pay.utime, self._pay.scaler_bytes)
