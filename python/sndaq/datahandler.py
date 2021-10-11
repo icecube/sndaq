@@ -53,7 +53,8 @@ class DataHandler:
 
     def update_buffer(self, idx_dom):
         data, idx_data = self.rebin_scalers(self._pay.utime, self._pay.scaler_bytes)
-        np.add.at(self._data, (idx_dom, idx_data), data)
+        if data.size > 0:
+            self._data.add(data, idx_dom, idx_data)
         self._payloads_read[idx_dom] += 1
 
     def rebin_scalers(self, utime, scaler_bytes):
@@ -61,11 +62,11 @@ class DataHandler:
             Could be changed to increment bin time as np.uint16 rather than thru array elements
         """
         scalers = np.frombuffer(scaler_bytes, dtype=np.uint8)
-        idx_sclr = scalers
-        raw_counts = np.zeros(self._staging_depth, dtype=np.uint8)
+        idx_sclr = scalers.nonzero()[0]
         if idx_sclr.size == 0:
-            return raw_counts
+            return np.array([]), np.array([])
 
+        raw_counts = np.zeros(self._staging_depth, dtype=np.uint8)
         scaler_utime = utime + idx_sclr*self._scaler_udt
         idx_raw = self._raw_utime.searchsorted(scaler_utime, side="left") - 1
         np.add.at(raw_counts, idx_raw, scalers[idx_sclr])
