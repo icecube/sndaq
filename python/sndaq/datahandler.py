@@ -5,14 +5,14 @@ from sndaq.reader import SN_PayloadReader
 
 class DataHandler:
 
-    def __init__(self, ndom=5160, dtype=np.uint16):
+    def __init__(self, ndom=5160, dtype=np.uint8):
 
         self._scaler_udt = int(250 * 2**16)
         self._scaler_dt = self.scaler_udt / 1e7
         self._raw_dt = 2
         self._raw_udt = int(self._raw_dt * 1e7)
         self._staging_depth = 2000
-        self._payloads_read = np.zeros(5160, dtype=np.uint16)
+        self._payloads_read = np.zeros(5160, dtype=np.uint32)
 
         self._data = np.zeros((ndom, self._staging_depth), dtype=dtype)
         self._raw_utime = np.zeros(self._staging_depth, dtype=np.uint32)
@@ -79,8 +79,8 @@ class DataHandler:
         idx_sclr = idx_sclr[cut]
 
         frac = 1. - ((self._raw_utime[idx_raw] + self._raw_udt - scaler_utime[cut])/self._scaler_udt)
-        raw_counts[idx_raw] -= np.uint16(0.5+frac*scalers[idx_sclr])
-        raw_counts[idx_raw+1] += np.uint16(0.5+frac*scalers[idx_sclr])
+        raw_counts[idx_raw] -= np.uint8(0.5+frac*scalers[idx_sclr])
+        raw_counts[idx_raw+1] += np.uint8(0.5+frac*scalers[idx_sclr])
 
         # Passing arrays like this may increase overhead and reduce efficiency
         idx_raw = raw_counts.nonzero()[0]
