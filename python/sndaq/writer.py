@@ -2,7 +2,9 @@ import os
 import gzip
 import bz2
 import struct
+import numpy as np
 from sndaq.reader import SN_Payload, SN_MAGIC_NUMBER
+from sndaq.detector import Detector
 
 
 class Writer(object):
@@ -29,6 +31,10 @@ class Writer(object):
         self._filename = filename
         self._fout = fout
         self._num_written = 0
+        
+        i3 = Detector()
+        self.doms = i3.dom_table
+        
 
     def __enter__(self):
         """Return this object as a context manager to used as `with SN_PayloadWriter(filename) as wrtr:`
@@ -51,6 +57,78 @@ class Writer(object):
                 self._fout.close()
             finally:
                 self._fout = None
+    
+    def in1d_dom(self, request):
+        """
+        :param request: Requested strings/DOMs
+        :type request: dict
+        
+        :return: Table of legitimate requested DOMs
+        :rtype: array
+        """
+        cut = np.in1d(self.doms['mbid'], request['doms'])
+        return self.doms[cut]
+    
+    def in1d_str(self, request):
+        """
+        :param request: Requested strings/DOMs
+        :type request: dict
+        
+        :return: Table of DOMs on legitimate requested strings
+        :rtype: array
+        """
+        cut = np.in1d(self.doms['str'], request['str'])
+        return self.doms[cut]
+    
+    def in1d_combined(self, request):
+        """Return all legitimate requested strings/DOMs from dictionary.
+        
+        :param request: Requested strings/DOMs
+        :type request: dict
+        
+        :return: Table of DOMs on legitimate requested strings/DOMs
+        :rtype: array
+        """
+        req_dom = self.in1d_dom(request)['mbid']
+        req_str = self.in1d_str(request)['mbid']
+        final = np.unique(np.append(req_dom, req_str))
+        cut = np.in1d(self.doms['mbid'], final)
+        return self.doms[cut]
+    
+    def makefile(self, n_scalers = 450, scaler_lambda = 0.8, t0 = 123456789, launch_time = 120006539,
+                 filter_type = 'doms', size_limit = 20e3):
+        
+        string1 = doms[doms['str']==1]
+        dict_filter = {
+            'str' : [],
+            'doms' : [x for x in string1['mbid']]
+        }
+    
+        doms = dict_filter[filter_type]
+        
+    
+        t0 = int(t0)
+        launch_time = int(launch_time)
+        n_scalers = int(n_scalers)
+        scaler_lambda = int(scaler_lambda)
+        utime = int(t0)
+        utimes = np.arange(utime, utime + 60*20e4, 20e4)
+        size_limit = int(size_limit)
+
+        paylist_init = []
+
+        while self._fout.tell() < size_limit:
+
+            for i, dom in enumerate(string1['mbid']):
+                utime = int(utimes[i])
+                domclock = (utime - launch_time)//250
+                scalers = np.random.poisson(scaler_lambda, size=n_scalers)
+                payload = construct_payload(utime, dom, domclock, scalers, True)
+                paylist_init.append(payload)
+                self.write(payload)
+                utimes[i] += (250 * 2**16)*(n_scalers)
+        print("File Size:", self._fout.tell()/1000000, "MB")
+
 
     @property
     def nrec(self) -> int:
