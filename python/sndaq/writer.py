@@ -98,6 +98,11 @@ class Writer(object):
     def makefile(self, n_scalers = 450, scaler_lambda = 0.8, t0 = 123456789, launch_time = 120006539,
                  filter_type = 'doms', size_limit = 20e3):
         
+        # Add dom/string selection function (request functions)
+        # Add variable names to returns in doc strings
+        # One sentence descriptions in top of doc strings
+        
+        
         string1 = doms[doms['str']==1]
         dict_filter = {
             'str' : [],
