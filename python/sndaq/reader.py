@@ -173,6 +173,20 @@ class SN_Payload(object):
             self.utime, self.__dom_id, self.domclock, len(self.__scaler_bytes)
         )
 
+    def __eq__(self, other):
+        if isinstance(other, self.__class__):
+            return self.__dict__ == other.__dict__
+        return NotImplemented
+
+    def __ne__(self, other):
+        x = self.__eq__(other)
+        if x is not NotImplemented:
+            return not x
+        return NotImplemented
+
+    def __hash__(self):
+        return hash(tuple(sorted(self.__dict__.items())))
+
     @property
     def dom_id(self) -> int:
         return self.__dom_id
