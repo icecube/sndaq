@@ -1,4 +1,5 @@
 import os
+import sys
 import gzip
 import bz2
 import struct
@@ -16,7 +17,7 @@ class Writer(object):
         :param filename: Name of payload file
         :type filename: str
         """
-        if not os.path.exists(filename) and not overwrite:
+        if os.path.exists(filename) and not overwrite:
             raise Exception("File \"{0:s}\" exists. Use kwarg \'overwite=True\' to force overwrite".format(filename))
 
         if filename.endswith(".gz"):
@@ -31,6 +32,10 @@ class Writer(object):
         self._filename = filename
         self._fout = fout
         self._num_written = 0
+        
+        self.filesize = 0
+        self.n_payloads = 0
+        self.n_series = 0
         
         i3 = Detector()
         self.doms = i3.dom_table
@@ -59,35 +64,35 @@ class Writer(object):
                 self._fout = None
     
     def in1d_dom(self, request):
-        """
+        """Return all legitimate requested DOMs.
         :param request: Requested strings/DOMs
         :type request: dict
         
-        :return: Table of legitimate requested DOMs
-        :rtype: array
+        :return dom_table: Table of legitimate requested DOMs
+        :rtype dom_table: array
         """
         cut = np.in1d(self.doms['mbid'], request['doms'])
         return self.doms[cut]
     
     def in1d_str(self, request):
-        """
+        """Return all DOMs on legimate requested strings.
         :param request: Requested strings/DOMs
         :type request: dict
         
-        :return: Table of DOMs on legitimate requested strings
-        :rtype: array
+        :return dom_table: Table of DOMs on legitimate requested strings
+        :rtype dom_table: array
         """
         cut = np.in1d(self.doms['str'], request['str'])
         return self.doms[cut]
     
     def in1d_combined(self, request):
-        """Return all legitimate requested strings/DOMs from dictionary.
+        """Return all legitimate requested DOMs (individual/strings) from dictionary.
         
         :param request: Requested strings/DOMs
         :type request: dict
         
-        :return: Table of DOMs on legitimate requested strings/DOMs
-        :rtype: array
+        :return dom_table: Table of DOMs on legitimate requested strings/DOMs
+        :rtype dom_table: array
         """
         req_dom = self.in1d_dom(request)['mbid']
         req_str = self.in1d_str(request)['mbid']
@@ -96,44 +101,135 @@ class Writer(object):
         return self.doms[cut]
     
     def makefile(self, n_scalers = 450, scaler_lambda = 0.8, t0 = 123456789, launch_time = 120006539,
-                 filter_type = 'doms', size_limit = 20e3):
+                 filter_type = {'doms': None, 'str': None}, n_hits = None, pay_series = None,
+                 size_limit = 20e3):
+        """Create small file with scaler data.
         
-        # Add dom/string selection function (request functions)
-        # Add variable names to returns in doc strings
-        # One sentence descriptions in top of doc strings
+        :param n_scalers: Number of scalers 
+        :type n_scalers: int
         
+        :param scaler_lambda: Scaler poisson distribution
+        :type scaler_lambda: float
         
-        string1 = doms[doms['str']==1]
-        dict_filter = {
-            'str' : [],
-            'doms' : [x for x in string1['mbid']]
-        }
-    
-        doms = dict_filter[filter_type]
+        :param t0: Starting time
+        :type t0: int
         
+        :param launch_time: DOM launch time
+        :type launch_time: int
+        
+        :param filter_type: Requested DOMs (individual or string)
+        :type filter_type: dict
+        
+        :param n_hits: Number of hits
+        :type n_hits: int
+        
+        :param pay_series: Number of hit series
+        :type pay_series: int
+        
+        :param size_limit: File size limit
+        :type size_limit: int
+        
+        :return new_file: File containing payloads
+        :rtype new_file: .dat file
+        """
+        for key in ['doms', 'str']:
+            if key not in filter_type.keys():
+                filter_type[key] = None
+        final_doms = self.in1d_combined(filter_type)
     
         t0 = int(t0)
         launch_time = int(launch_time)
         n_scalers = int(n_scalers)
-        scaler_lambda = int(scaler_lambda)
+        scaler_lambda = float(scaler_lambda)
         utime = int(t0)
         utimes = np.arange(utime, utime + 60*20e4, 20e4)
         size_limit = int(size_limit)
 
-        paylist_init = []
-
-        while self._fout.tell() < size_limit:
-
-            for i, dom in enumerate(string1['mbid']):
-                utime = int(utimes[i])
-                domclock = (utime - launch_time)//250
-                scalers = np.random.poisson(scaler_lambda, size=n_scalers)
-                payload = construct_payload(utime, dom, domclock, scalers, True)
-                paylist_init.append(payload)
-                self.write(payload)
-                utimes[i] += (250 * 2**16)*(n_scalers)
-        print("File Size:", self._fout.tell()/1000000, "MB")
-
+        dict_params = {
+            't0' : t0,
+            'launch_time' : launch_time,
+            'n_scalers' : n_scalers,
+            'scaler_lambda' : scaler_lambda,
+            'start_utime' : utime,
+            'current_utimes' : np.arange(utime, utime + 60*20e4, 20e4)
+        }
+        
+        dict_type = {}
+        for val, key in zip([size_limit*1e3, n_hits, pay_series], ['size', 'payloads', 'payload_series']):
+            if val is not None:
+                dict_type[key] = val
+                
+        self.write_payloads(dict_type, final_doms, dict_params)
+        
+        # Configuration to get variables, variables to get dict, dict to get files
+        # Optional variables (in python) or get from config file
+        
+        
+    def keep_writing(self, dict_type):
+        """Determines if the payloads should continue to be written.
+        """
+        looping = None
+        size_looping = None
+        pay_looping = None
+        pay_series_looping = None
+        if 'size' in dict_type.keys():
+            size = dict_type['size']
+            if self._fout.tell() < size:
+                size_looping = True
+            else:
+                size_looping = False
+        if 'payloads' in dict_type.keys():
+            payloads = dict_type['payloads']
+            # if creating large data set (multiple files), nrec will reset every time
+            if self.n_payloads < payloads:
+                pay_looping = True
+            else:
+                pay_looping = False
+        if 'payload_series' in dict_type.keys():
+            payload_series = dict_type['payload_series']
+            if self.n_series < payload_series:
+                pay_series_looping = True
+            else:
+                pay_series_looping = False 
+        l = [x for x in [size_looping, pay_looping, pay_series_looping] if x is not None]
+        return all(l)   
+    
+    def write_payloads(self, dict_type, final_doms, dict_params):
+        """Writes payloads until reaching limit.
+        """
+        itr_dom = iter(enumerate(final_doms['mbid']))
+        # try to read list of DOMs, if nothing left, None tuple
+        i, dom = next(itr_dom, (None, None))
+        # if i/dom are initially None, no DOMs were requested
+        if i is None or dom is None:
+            raise RuntimeError('No DOMs requested.')
+        while self.keep_writing(dict_type):
+            # if i/dom are None, move to the next iteration
+            # start next hit series
+            # initially does nothing, since None tuple would've been chekced above
+            if i is None or dom is None:
+                itr_dom = iter(enumerate(final_doms['mbid']))
+                i, dom = next(itr_dom, (None, None))
+            utime = dict_params['start_utime']
+            domclock = (utime - dict_params['launch_time'])//250
+            scalers = np.random.poisson(dict_params['scaler_lambda'], size=dict_params['n_scalers'])
+            payload = construct_payload(utime, dom, domclock, scalers, True)
+            self.write(payload)
+            self.n_payloads += 1
+            self.filesize += 34 + payload.scaler_length
+            dict_params['current_utimes'][i] += (250 * 2**16)*(dict_params['n_scalers'])
+            # Move to the next iteration, if nothing left, None tuple
+            i, dom = next(itr_dom, (None, None))
+            # if i/dom are None, hit series complete, increment by 1
+            if i is None or dom is None:
+                self.n_series += 1
+                
+    def status(self, sep=' ', end='\n', file=sys.stdout, flush=False):
+        """Print summary statement.
+        """
+        status_string = 'File size: {0} MB, Number of Payloads: {1}, Number of Payload Series: {2}'.format(
+            self.filesize/1000000, self.n_payloads, self.n_series)
+        print(status_string, sep=sep, end=end, file=file, flush=flush)
 
     @property
     def nrec(self) -> int:
@@ -192,3 +288,4 @@ class SN_PayloadWriter(Writer):
 
     def write(self, payload):
         self._fout.write(payload.record_bytes)
+    # 
