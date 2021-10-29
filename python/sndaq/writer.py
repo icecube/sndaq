@@ -161,10 +161,6 @@ class Writer(object):
                 
         self.write_payloads(dict_type, final_doms, dict_params)
         
-        # Configuration to get variables, variables to get dict, dict to get files
-        # Optional variables (in python) or get from config file
-        
-        
     def keep_writing(self, dict_type):
         """Determines if the payloads should continue to be written.
         """
