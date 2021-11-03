@@ -4,6 +4,7 @@ import gzip
 import bz2
 import struct
 import numpy as np
+import configparser
 from sndaq.reader import SN_Payload, SN_MAGIC_NUMBER
 from sndaq.detector import Detector
 
@@ -101,8 +102,8 @@ class Writer(object):
         return self.doms[cut]
     
     def makefile(self, n_scalers = 450, scaler_lambda = 0.8, t0 = 123456789, launch_time = 120006539,
-                 filter_type = {'doms': None, 'str': None}, n_hits = None, pay_series = None,
-                 size_limit = 20e3):
+                 filter_type = {'doms': None, 'str': None}, payload_step = 20e4, n_hits = None, 
+                 pay_series = None, size_limit = 20e3):
         """Create small file with scaler data.
         
         :param n_scalers: Number of scalers 
@@ -129,6 +130,8 @@ class Writer(object):
         :param size_limit: File size limit
         :type size_limit: int
         
+        :: payload step
+        
         :return new_file: File containing payloads
         :rtype new_file: .dat file
         """
@@ -142,7 +145,7 @@ class Writer(object):
         n_scalers = int(n_scalers)
         scaler_lambda = float(scaler_lambda)
         utime = int(t0)
-        utimes = np.arange(utime, utime + 60*20e4, 20e4)
+        utimes = np.arange(utime, utime + final_doms.size*payload_step, payload_step)
         size_limit = int(size_limit)
 
         dict_params = {
@@ -151,15 +154,49 @@ class Writer(object):
             'n_scalers' : n_scalers,
             'scaler_lambda' : scaler_lambda,
             'start_utime' : utime,
-            'current_utimes' : np.arange(utime, utime + 60*20e4, 20e4)
+            'current_utimes' : np.arange(utime, utime + final_doms.size*payload_step, payload_step)
         }
+        
+        config = configparser.ConfigParser()
+        config.read('File.ini')
+        default = config['DEFAULT']
+        payload_step = int(default.getfloat('payload_step'))
+        dom_str = [int(x, 10) for x in default.get('dom_str').replace(' ', '').split(',')]
+        filter_type = {'str': dom_str}  # Needs to be more dynamic, don't need to assume 'dom_str' is there
+        for key in ['doms', 'str']:
+            if key not in filter_type.keys():
+                filter_type[key] = None
+        final_doms = self.in1d_combined(filter_type)
+        
+        dict_param = {
+            't0' : default.getint('t0'),
+            'launch_time' : default.getint('launch_time'),
+            'n_scalers' : default.getint('n_scalers'),
+            'scaler_lambda' : default.getfloat('scaler_lambda'),
+            'start_utime' : default.getint('utime'),
+            'current_utimes' : np.arange(utime, utime + final_doms.size*payload_step, payload_step)
+        }
+        
+        # Check Mode
+        # Check if running from argument mode, config file mode
+        # Check for file, change default value to none
+        # If all none, go to config mode, if config nothing, error
+        # Is there config file?, try with that, backup with arguments
+        # Function for each mode (clean coding)
+        # Setup for argument, setup for config
+        # Anything controllable as argument should be in config file
+        
+        # Launch times
+        # One time for all DOMs to use, or specify start time of every used DOM
+        # If don't have appropriate number of launch times for all DOMs, error
+        # ToDo: Check ordering scheme for DOM launch times on same string
         
         dict_type = {}
         for val, key in zip([size_limit*1e3, n_hits, pay_series], ['size', 'payloads', 'payload_series']):
             if val is not None:
                 dict_type[key] = val
                 
-        self.write_payloads(dict_type, final_doms, dict_params)
+        self.write_payloads(dict_type, final_doms, dict_param)
         
     def keep_writing(self, dict_type):
         """Determines if the payloads should continue to be written.
@@ -190,7 +227,7 @@ class Writer(object):
         l = [x for x in [size_looping, pay_looping, pay_series_looping] if x is not None]
         return all(l)   
     
-    def write_payloads(self, dict_type, final_doms, dict_params):
+    def write_payloads(self, dict_type, final_doms, dict_param):
         """Writes payloads until reaching limit.
         """
         itr_dom = iter(enumerate(final_doms['mbid']))
@@ -206,14 +243,14 @@ class Writer(object):
             if i is None or dom is None:
                 itr_dom = iter(enumerate(final_doms['mbid']))
                 i, dom = next(itr_dom, (None, None))
-            utime = dict_params['start_utime']
-            domclock = (utime - dict_params['launch_time'])//250
-            scalers = np.random.poisson(dict_params['scaler_lambda'], size=dict_params['n_scalers'])
+            utime = dict_param['start_utime']
+            domclock = (utime - dict_param['launch_time'])//250
+            scalers = np.random.poisson(dict_param['scaler_lambda'], size=dict_param['n_scalers'])
             payload = construct_payload(utime, dom, domclock, scalers, True)
             self.write(payload)
             self.n_payloads += 1
             self.filesize += 34 + payload.scaler_length
-            dict_params['current_utimes'][i] += (250 * 2**16)*(dict_params['n_scalers'])
+            dict_param['current_utimes'][i] += (250 * 2**16)*(dict_param['n_scalers'])
             # Move to the next iteration, if nothing left, None tuple
             i, dom = next(itr_dom, (None, None))
             # if i/dom are None, hit series complete, increment by 1
