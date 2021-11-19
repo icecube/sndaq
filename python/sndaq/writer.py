@@ -1,3 +1,6 @@
+"""
+Classes for writing SN Payload data files
+"""
 import os
 import sys
 import gzip
@@ -40,7 +43,6 @@ class Writer(object):
         
         i3 = Detector()
         self.doms = i3.dom_table
-        
 
     def __enter__(self):
         """Return this object as a context manager to used as `with SN_PayloadWriter(filename) as wrtr:`
@@ -106,7 +108,7 @@ class Writer(object):
     def makefile(self, n_scalers=None, scaler_lambda=None, t0=None, 
              launch_time=None, requested_doms=None, payload_step=None, 
              n_hits=None, pay_series=None, size_limit=None, config_file=None):
-        """Creates a file containing payloads with scaler data.
+        """Creates a .dat file containing payloads with scaler data.
         
         :param n_scalers: Number of scalers 
         :type n_scalers: int
@@ -134,19 +136,25 @@ class Writer(object):
         
         :param size_limit: File size limit
         :type size_limit: int
-        
-        :return new_file: MB file containing payloads
-        :rtype new_file: .dat file
+
+        :param config_file: Path to configuration file
+        :type config_file: str or path-like
+
+        Notes
+        -----
+        Creates .dat file containing payloads at location specified by path when
+        writer object is initialized.
         """
-        # ToDo: Check ordering scheme for DOM launch times on same string
+        # TODO: @sgriswol Check ordering scheme for DOM launch times on same string
+        # That is to say, if launch times are requested, check that length aligns with requested ID's and properly
+        # organize DOM/Launch times as needed (Monotonically increasing?? -- May not be necessary until writing occurs)
         dict_param, final_doms, control_dict = {}, {}, {}
         
         if config_file is None:
             dict_param, final_doms, control_dict = self.arg_param(
-                self, n_scalers=None, scaler_lambda=None, t0=None, 
+                n_scalers=None, scaler_lambda=None, t0=None,
                 launch_time=None, requested_doms=None, payload_step=None, 
-                n_hits=None, pay_series=None, size_limit=None, 
-                config_file=None)
+                n_hits=None, pay_series=None, size_limit=None)
         else:
             if os.path.isfile(config_file):
                 config = configparser.ConfigParser()
@@ -188,7 +196,7 @@ class Writer(object):
             requested_doms['str'] = dom_str
         if 'doms' in detector:
             dom_id = [x for x in detector.get('doms').replace(' ', '').split(',')]
-            requested_doms['doms'] = dom_str
+            requested_doms['doms'] = dom_id
         for key in ['doms', 'str']:
             if key not in requested_doms.keys():
                 requested_doms[key] = None
@@ -270,8 +278,7 @@ class Writer(object):
                 control_dict[key] = val
         
         return dict_params, final_doms, control_dict
-        
-        
+
     def keep_writing(self, control_dict):
         """Determines if payloads should continue to be written to the file.
         
@@ -281,7 +288,6 @@ class Writer(object):
         :return continue_writing: True/False
         :rtype continue_writing: bool
         """
-        looping = None
         size_looping = None
         pay_looping = None
         pay_series_looping = None
@@ -303,9 +309,9 @@ class Writer(object):
                 pay_series_looping = True
             else:
                 pay_series_looping = False 
-        l = [x for x in [size_looping, pay_looping, pay_series_looping] 
-             if x is not None]
-        return all(l)
+        looping = [x for x in [size_looping, pay_looping, pay_series_looping]
+                   if x is not None]
+        return all(looping)
     
     def write_payloads(self, control_dict, final_doms, dict_param):
         """Writes payloads until reaching limit.
