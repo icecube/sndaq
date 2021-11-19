@@ -149,26 +149,22 @@ class Writer(object):
                 config_file=None)
         else:
             if os.path.isfile(config_file):
-                dict_param, final_doms, control_dict = self.config_param(
-                    config_file)
                 config = configparser.ConfigParser()
                 config.read(config_file)
                 default = config['DEFAULT']
+                detector = config['DETECTOR']
+                required_params = ['n_scalers', 'scaler_lambda', 't0', 'launch_time', 'payload_step']
+                for param in required_params:
+                    if param not in default:
+                        raise RuntimeError('Required parameter {0} is missing.'.format(param))
                 for key in default:
-                    if 't0' == 'None':
-                        raise RuntimeError('No t0 provided.')
-                    if 'launch_time' == 'None':
-                        raise RuntimeError('No launch time provided.')
-                    if 'n_scalers' == 'None':
-                        raise RuntimeError('Number of scalers provided.')
-                    if 'scaler_lambda' == 'None':
-                        raise RuntimeError('No scaler lambda provided.')
-                    if 'utime' == 'None':
-                        raise RuntimeError('No utime provided.')
-                    if 'payload step' == 'None':
-                        raise RuntimeError('No payload step provided.')
-                
-        # Have enough information to create file?
+                    if default[key] == 'None':
+                        raise RuntimeError('Required parameter {0} provided as \'None\'.'.format(key))
+                if not any([key in detector for key in ['doms', 'dom_str']]):
+                    raise RuntimeError('No DOMs requested. Please use \'dom\' or \'dom_str\' keys.')
+                if all([detector[key] == 'None' for key in ['doms', 'dom_str']]):
+                    raise RuntimeError('Required parameters, \'dom\' and \'dom_str\', are both \'None\'.')
+                dict_param, final_doms, control_dict = self.config_param(config_file)
                 
         self.write_payloads(control_dict, final_doms, dict_param)   
     
@@ -184,26 +180,15 @@ class Writer(object):
         config = configparser.ConfigParser()
         config.read(config_file)
         default = config['DEFAULT']
+        detector = config['DETECTOR']
         payload_step = int(default.getfloat('payload_step'))
-#         dom_str = [int(x, 10) for x in 
-#                    default.get('dom_str').replace(' ', '').split(',')]
         requested_doms = {}
-        for key in default:
-            if 'dom_str' != 'None':
-                dom_str = [int(x, 10) for x in 
-                           default.get('dom_str').replace(' ', '').split(',')]
-                requested_doms['str'] = dom_str
-            if 'doms' != 'None':
-                dom_id = [x for x in 
-                          default.get('doms').replace(' ', '').split(',')]
-                requested_doms['doms'] = dom_str
-        # Check dom_str is requested field, 
-            # check if it has valid value (not None)
-                # read in value
-        # same steps for other variable (dom IDs)
-#         requested_doms = {'doms': dom_id, 'str': dom_str}
-        if requested_doms is None:
-            raise RuntimeError('No DOMs requested.')
+        if 'dom_str' in detector:
+            dom_str = [int(x, 10) for x in detector.get('dom_str').replace(' ', '').split(',')]
+            requested_doms['str'] = dom_str
+        if 'doms' in detector:
+            dom_id = [x for x in detector.get('doms').replace(' ', '').split(',')]
+            requested_doms['doms'] = dom_str
         for key in ['doms', 'str']:
             if key not in requested_doms.keys():
                 requested_doms[key] = None
