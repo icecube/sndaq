@@ -71,7 +71,7 @@ class Writer(object):
         :type request: dict
         
         :return dom_table: Table of legitimate requested DOMs
-        :rtype dom_table: np.array
+        :rtype dom_table: numpy.ndarray
         """
         cut = np.in1d(self.doms['mbid'], request['doms'])
         return self.doms[cut]
@@ -83,7 +83,7 @@ class Writer(object):
         :type request: dict
         
         :return dom_table: Table of DOMs on legitimate requested strings
-        :rtype dom_table: np.array
+        :rtype dom_table: numpy.ndarray
         """
         cut = np.in1d(self.doms['str'], request['str'])
         return self.doms[cut]
@@ -95,7 +95,7 @@ class Writer(object):
         :type request: dict
         
         :return dom_table: Table of DOMs on legitimate requested strings/DOMs
-        :rtype dom_table: np.array
+        :rtype dom_table: numpy.ndarray
         """
         req_dom = self.in1d_dom(request)['mbid']
         req_str = self.in1d_str(request)['mbid']
@@ -103,9 +103,9 @@ class Writer(object):
         cut = np.in1d(self.doms['mbid'], final)
         return self.doms[cut]        
         
-    def makefile(self, n_scalers=None, scaler_lambda=None, t0=None, launch_time=None,
-                 requested_doms=None, payload_step=None, n_hits=None, 
-                 pay_series=None, size_limit=None, config_file=None):
+    def makefile(self, n_scalers=None, scaler_lambda=None, t0=None, 
+             launch_time=None, requested_doms=None, payload_step=None, 
+             n_hits=None, pay_series=None, size_limit=None, config_file=None):
         """Creates a file containing payloads with scaler data.
         
         :param n_scalers: Number of scalers 
@@ -135,7 +135,7 @@ class Writer(object):
         :param size_limit: File size limit
         :type size_limit: int
         
-        :return new_file: File containing payloads
+        :return new_file: MB file containing payloads
         :rtype new_file: .dat file
         """
         # ToDo: Check ordering scheme for DOM launch times on same string
@@ -143,14 +143,32 @@ class Writer(object):
         
         if config_file is None:
             dict_param, final_doms, control_dict = self.arg_param(
-                self, n_scalers=None, scaler_lambda=None, t0=None, launch_time=None,
-                requested_doms=None, payload_step=None, n_hits=None, 
-                pay_series=None, size_limit=None, config_file=None)
+                self, n_scalers=None, scaler_lambda=None, t0=None, 
+                launch_time=None, requested_doms=None, payload_step=None, 
+                n_hits=None, pay_series=None, size_limit=None, 
+                config_file=None)
         else:
             if os.path.isfile(config_file):
-                dict_param, final_doms, control_dict = self.config_param(config_file)
+                dict_param, final_doms, control_dict = self.config_param(
+                    config_file)
+                config = configparser.ConfigParser()
+                config.read(config_file)
+                default = config['DEFAULT']
+                for key in default:
+                    if 't0' == 'None':
+                        raise RuntimeError('No t0 provided.')
+                    if 'launch_time' == 'None':
+                        raise RuntimeError('No launch time provided.')
+                    if 'n_scalers' == 'None':
+                        raise RuntimeError('Number of scalers provided.')
+                    if 'scaler_lambda' == 'None':
+                        raise RuntimeError('No scaler lambda provided.')
+                    if 'utime' == 'None':
+                        raise RuntimeError('No utime provided.')
+                    if 'payload step' == 'None':
+                        raise RuntimeError('No payload step provided.')
                 
-        # Have information? check
+        # Have enough information to create file?
                 
         self.write_payloads(control_dict, final_doms, dict_param)   
     
@@ -161,18 +179,29 @@ class Writer(object):
         :rtype dict_param: dict
         
         :return final_doms: DOM table of final DOMs
-        :rtype final_doms: np.array
+        :rtype final_doms: numpy.ndarray
         """
         config = configparser.ConfigParser()
         config.read(config_file)
         default = config['DEFAULT']
         payload_step = int(default.getfloat('payload_step'))
-        dom_str = [int(x, 10) for x in default.get('dom_str').replace(' ', '').split(',')]
+#         dom_str = [int(x, 10) for x in 
+#                    default.get('dom_str').replace(' ', '').split(',')]
+        requested_doms = {}
+        for key in default:
+            if 'dom_str' != 'None':
+                dom_str = [int(x, 10) for x in 
+                           default.get('dom_str').replace(' ', '').split(',')]
+                requested_doms['str'] = dom_str
+            if 'doms' != 'None':
+                dom_id = [x for x in 
+                          default.get('doms').replace(' ', '').split(',')]
+                requested_doms['doms'] = dom_str
         # Check dom_str is requested field, 
             # check if it has valid value (not None)
                 # read in value
         # same steps for other variable (dom IDs)
-        requested_doms = {'str': dom_str}
+#         requested_doms = {'doms': dom_id, 'str': dom_str}
         if requested_doms is None:
             raise RuntimeError('No DOMs requested.')
         for key in ['doms', 'str']:
@@ -182,12 +211,14 @@ class Writer(object):
         
         utime = default.getint('utime')
         dict_param = {
-            't0' : default.getint('t0'),
-            'launch_time' : default.getint('launch_time'),
-            'n_scalers' : default.getint('n_scalers'),
-            'scaler_lambda' : default.getfloat('scaler_lambda'),
-            'start_utime' : utime,
-            'current_utimes' : np.arange(utime, utime + final_doms.size*payload_step, payload_step)
+            't0': default.getint('t0'),
+            'launch_time': default.getint('launch_time'),
+            'n_scalers': default.getint('n_scalers'),
+            'scaler_lambda': default.getfloat('scaler_lambda'),
+            'start_utime': utime,
+            'current_utimes': np.arange(utime, utime + 
+                                        final_doms.size*payload_step, 
+                                        payload_step)
         }
         
         control_dict = {}
@@ -199,7 +230,8 @@ class Writer(object):
                 control_dict['size'] = int(float(size_att['size']))
         if 'payload_series' in size_att:
             if size_att['payload_series'] != 'None':
-                control_dict['payload_series'] = int(float(size_att['payload_series']))
+                control_dict['payload_series'] = int(
+                    float(size_att['payload_series']))
         if 'payloads' in size_att:
             if size_att['payloads'] != 'None':
                 control_dict['payloads'] = int(float(size_att['payloads']))
@@ -209,9 +241,9 @@ class Writer(object):
         
         return dict_param, final_doms, control_dict
     
-    def arg_param(self, n_scalers = None, scaler_lambda = None, t0 = None, launch_time = None,
-                 requested_doms = None, payload_step = None, n_hits = None, 
-                 pay_series = None, size_limit = None):
+    def arg_param(self, n_scalers=None, scaler_lambda=None, t0=None, 
+                  launch_time=None, requested_doms=None, payload_step=None, 
+                  n_hits=None, pay_series=None, size_limit=None):
         """Creates parameter dictionary from preset arguments.
         
         :param : See self.makefile() docstring
@@ -221,7 +253,7 @@ class Writer(object):
         :rtype dict_param: dict
         
         :return final_doms: DOM table of final DOMs
-        :rtype final_doms: np.array
+        :rtype final_doms: numpy.ndarray
         """
         for key in ['doms', 'str']:
             if key not in requested_doms.keys():
@@ -233,20 +265,22 @@ class Writer(object):
         n_scalers = int(n_scalers)
         scaler_lambda = float(scaler_lambda)
         utime = int(t0)
-        utimes = np.arange(utime, utime + final_doms.size*payload_step, payload_step)
+        utimes = np.arange(utime, utime + final_doms.size*payload_step, 
+                           payload_step)
         size_limit = int(size_limit)
 
         dict_params = {
-            't0' : t0,
-            'launch_time' : launch_time,
-            'n_scalers' : n_scalers,
-            'scaler_lambda' : scaler_lambda,
-            'start_utime' : utime,
-            'current_utimes' : utimes
+            't0': t0,
+            'launch_time': launch_time,
+            'n_scalers': n_scalers,
+            'scaler_lambda': scaler_lambda,
+            'start_utime': utime,
+            'current_utimes': utimes
         }
         
         control_dict = {}
-        for val, key in zip([size_limit*1e3, n_hits, pay_series], ['size', 'payloads', 'payload_series']):
+        for val, key in zip([size_limit*1e3, n_hits, pay_series], 
+                            ['size', 'payloads', 'payload_series']):
             if val is not None:
                 control_dict[key] = val
         
@@ -256,7 +290,7 @@ class Writer(object):
     def keep_writing(self, control_dict):
         """Determines if payloads should continue to be written to the file.
         
-        :param control_dict: File limiting attributes (size, payloads, payloads series)
+        :param control_dict: File limits (size, payloads, payload series)
         :type control_dict: dict
         
         :return continue_writing: True/False
@@ -284,17 +318,18 @@ class Writer(object):
                 pay_series_looping = True
             else:
                 pay_series_looping = False 
-        l = [x for x in [size_looping, pay_looping, pay_series_looping] if x is not None]
-        return all(l)   
+        l = [x for x in [size_looping, pay_looping, pay_series_looping] 
+             if x is not None]
+        return all(l)
     
     def write_payloads(self, control_dict, final_doms, dict_param):
         """Writes payloads until reaching limit.
         
-        :param control_dict: File limiting attributes (size, payloads, payloads series)
+        :param control_dict: File limits (size, payloads, payload series)
         :type control_dict: dict
         
         :param final_doms: DOM table of final DOMs
-        :type final_doms: np.array
+        :type final_doms: numpy.ndarray
         
         :param dict_param: Payload parameters
         :type dict_param: dict
@@ -309,7 +344,8 @@ class Writer(object):
                 i, dom = next(itr_dom, (None, None))
             utime = dict_param['start_utime']
             domclock = (utime - dict_param['launch_time'])//250
-            scalers = np.random.poisson(dict_param['scaler_lambda'], size=dict_param['n_scalers'])
+            scalers = np.random.poisson(dict_param['scaler_lambda'], 
+                                        size=dict_param['n_scalers'])
             payload = construct_payload(utime, dom, domclock, scalers, True)
             self.write(payload)
             self.n_payloads += 1
