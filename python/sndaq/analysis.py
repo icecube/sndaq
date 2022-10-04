@@ -298,7 +298,7 @@ class AnalysisHandler(AnalysisConfig):
         # tmp = (signal*(1. - eps))**2 / (var + eps*abs(signal))
         analysis.chi2 = np.sum((rate - (mean+self.eps*signal))**2 / (var + self.eps*abs(signal)))
 
-    def accumulate(self, val):
+    def accumulate(self, val, idx):
         """Accumulate 2 ms data into analysis binsize
 
         Parameters
@@ -322,7 +322,7 @@ class AnalysisHandler(AnalysisConfig):
         sndaq.analysis.reset_accumulator
         """
         # This could be it's own class/component, maybe use itertools? Maybe use a generator w/ yield?
-        self._accum_data += val
+        np.add.at(self._accum_data, idx, val)
         self._accum_count -= 1
         return bool(self._accum_count)
 
@@ -350,7 +350,8 @@ class AnalysisHandler(AnalysisConfig):
             2ms data for each DOM at a particular timestamp
         """
         self.buffer_raw.append(value)
-        if not self.accumulate(value):  # Accumulator indicates time to reset, as base analysis bin of data is ready
+        idx = value.nonzero()[0]
+        if not self.accumulate(value[idx], idx):  # Accumulator indicates time to reset, as base analysis bin of data is ready
             # There's almost certainly a better way to do this.
             accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
             self.reset_accumulator()

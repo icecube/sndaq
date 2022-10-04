@@ -3,6 +3,7 @@
 import numpy as np
 import glob
 from sndaq.reader import SN_PayloadReader
+from sndaq.buffer import stagingbuffer
 
 
 class DataHandler:
@@ -24,9 +25,9 @@ class DataHandler:
         self._raw_dt = 2
         self._raw_udt = int(self._raw_dt * 1e7)
         self._staging_depth = 2000
-        self._payloads_read = np.zeros(5160, dtype=np.uint16)
+        self._payloads_read = np.zeros(5160, dtype=np.uint32)
 
-        self._data = np.zeros((ndom, self._staging_depth), dtype=dtype)
+        self._data = stagingbuffer(size=self._staging_depth, ndom=ndom, dtype=dtype)  #np.zeros((ndom, self._staging_depth), dtype=dtype)
         self._raw_utime = np.zeros(self._staging_depth, dtype=np.uint32)
 
         self._file = None
@@ -106,10 +107,10 @@ class DataHandler:
     def advance_buffer(self):
         """Roll front of staging buffer off the end, add empty space at back
         """
+        self._raw_utime += self._raw_udt  # TODO: Decide if this could instead be tracked as integer of first bin utime
         self._raw_utime += self._raw_udt
         # Can this rolling operation be done with np.add.at(data[1:]-data[:-1], arange(1, data.size-1)?
-        self._data = np.roll(self._data, -1, axis=1)
-        self._data[:, -1] = 0
+        self._data.advance()
 
     def update_buffer(self, idx_dom):
         """Add current payload to staging buffer according to DOM index
@@ -124,7 +125,8 @@ class DataHandler:
         It is assumed that idx_dom corresponds to the current payload contained by _pay
         """
         data, idx_data = self.rebin_scalers(self._pay.utime, self._pay.scaler_bytes)
-        np.add.at(self._data, (idx_dom, idx_data), data)
+        if data.size > 0:
+            self._data.add(data, idx_dom, idx_data)
         self._payloads_read[idx_dom] += 1
 
     def rebin_scalers(self, utime, scaler_bytes):
@@ -149,11 +151,11 @@ class DataHandler:
         Could be changed to increment bin time as np.uint16 rather than thru array elements
         """
         scalers = np.frombuffer(scaler_bytes, dtype=np.uint8)
-        idx_sclr = scalers
-        raw_counts = np.zeros(self._staging_depth, dtype=np.uint8)
+        idx_sclr = scalers.nonzero()[0]
         if idx_sclr.size == 0:
-            return raw_counts
+            return np.array([]), np.array([])
 
+        raw_counts = np.zeros(self._staging_depth, dtype=np.uint8)
         scaler_utime = utime + idx_sclr*self._scaler_udt
         idx_raw = self._raw_utime.searchsorted(scaler_utime, side="left") - 1
         np.add.at(raw_counts, idx_raw, scalers[idx_sclr])
@@ -161,14 +163,14 @@ class DataHandler:
         # like so, not via base_counts[idx_base] += scalers[idx_sclr] which only performs addition for first idx
         # idx_base
 
-        cut = (scaler_utime + self._scaler_udt + self._raw_udt > self._raw_utime[idx_raw]) & \
+        cut = (scaler_utime + self._scaler_udt > self._raw_utime[idx_raw] + self._raw_udt) & \
               (scaler_utime < self._raw_utime[idx_raw] + self._raw_udt)
         idx_raw = idx_raw[cut]
         idx_sclr = idx_sclr[cut]
 
         frac = 1. - ((self._raw_utime[idx_raw] + self._raw_udt - scaler_utime[cut])/self._scaler_udt)
-        raw_counts[idx_raw] -= np.uint16(0.5+frac*scalers[idx_sclr])
-        raw_counts[idx_raw+1] += np.uint16(0.5+frac*scalers[idx_sclr])
+        raw_counts[idx_raw] -= np.uint8(0.5+frac*scalers[idx_sclr])
+        raw_counts[idx_raw+1] += np.uint8(0.5+frac*scalers[idx_sclr])
 
         # Passing arrays like this may increase overhead and reduce efficiency
         idx_raw = raw_counts.nonzero()[0]
