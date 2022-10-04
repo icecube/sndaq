@@ -1,5 +1,4 @@
-"""
-Classes for writing SN Payload data files
+""" Classes for writing SN Payload data files
 """
 import os
 import sys
@@ -36,11 +35,11 @@ class Writer(object):
         self._filename = filename
         self._fout = fout
         self._num_written = 0
-        
+
         self.filesize = 0
         self.n_payloads = 0
         self.n_series = 0
-        
+
         i3 = Detector()
         self.doms = i3.dom_table
 
@@ -65,37 +64,37 @@ class Writer(object):
                 self._fout.close()
             finally:
                 self._fout = None
-    
+
     def in1d_dom(self, request):
         """Return all legitimate requested individual DOMs.
-        
+
         :param request: Requested strings/DOMs
         :type request: dict
-        
+
         :return dom_table: Table of legitimate requested DOMs
         :rtype dom_table: numpy.ndarray
         """
         cut = np.in1d(self.doms['mbid'], request['doms'])
         return self.doms[cut]
-    
+
     def in1d_str(self, request):
         """Return all DOMs on legimate requested strings.
-        
+
         :param request: Requested strings/DOMs
         :type request: dict
-        
+
         :return dom_table: Table of DOMs on legitimate requested strings
         :rtype dom_table: numpy.ndarray
         """
         cut = np.in1d(self.doms['str'], request['str'])
         return self.doms[cut]
-    
+
     def in1d_combined(self, request):
         """Return all legitimate requested DOMs (individual/strings) from dictionary.
-        
+
         :param request: Requested strings/DOMs
         :type request: dict
-        
+
         :return dom_table: Table of DOMs on legitimate requested strings/DOMs
         :rtype dom_table: numpy.ndarray
         """
@@ -103,37 +102,37 @@ class Writer(object):
         req_str = self.in1d_str(request)['mbid']
         final = np.unique(np.append(req_dom, req_str))
         cut = np.in1d(self.doms['mbid'], final)
-        return self.doms[cut]        
-        
-    def makefile(self, n_scalers=None, scaler_lambda=None, t0=None, 
-             launch_time=None, requested_doms=None, payload_step=None, 
+        return self.doms[cut]
+
+    def makefile(self, n_scalers=None, scaler_lambda=None, t0=None,
+             launch_time=None, requested_doms=None, payload_step=None,
              n_hits=None, pay_series=None, size_limit=None, config_file=None):
         """Creates a .dat file containing payloads with scaler data.
-        
-        :param n_scalers: Number of scalers 
+
+        :param n_scalers: Number of scalers
         :type n_scalers: int
-        
+
         :param scaler_lambda: Scaler poisson distribution
         :type scaler_lambda: float
-        
+
         :param t0: Starting time
         :type t0: int
-        
+
         :param launch_time: DOM launch time
         :type launch_time: int
-        
+
         :param requested_doms: Requested DOMs (individual(s) or string)
         :type requested_doms: dict
-        
+
         :param payload_step: Utime step/interval between payloads
         :type payload_step: int
-        
+
         :param n_hits: Number of hits
         :type n_hits: int
-        
+
         :param pay_series: Number of hit series
         :type pay_series: int
-        
+
         :param size_limit: File size limit
         :type size_limit: int
 
@@ -149,11 +148,11 @@ class Writer(object):
         # That is to say, if launch times are requested, check that length aligns with requested ID's and properly
         # organize DOM/Launch times as needed (Monotonically increasing?? -- May not be necessary until writing occurs)
         dict_param, final_doms, control_dict = {}, {}, {}
-        
+
         if config_file is None:
             dict_param, final_doms, control_dict = self.arg_param(
                 n_scalers=None, scaler_lambda=None, t0=None,
-                launch_time=None, requested_doms=None, payload_step=None, 
+                launch_time=None, requested_doms=None, payload_step=None,
                 n_hits=None, pay_series=None, size_limit=None)
         else:
             if os.path.isfile(config_file):
@@ -173,15 +172,15 @@ class Writer(object):
                 if all([detector[key] == 'None' for key in ['doms', 'dom_str']]):
                     raise RuntimeError('Required parameters, \'dom\' and \'dom_str\', are both \'None\'.')
                 dict_param, final_doms, control_dict = self.config_param(config_file)
-                
-        self.write_payloads(control_dict, final_doms, dict_param)   
-    
+
+        self.write_payloads(control_dict, final_doms, dict_param)
+
     def config_param(self, config_file):
         """Creates parameter dictionary from config file.
-        
+
         :return dict_param: Payload parameters
         :rtype dict_param: dict
-        
+
         :return final_doms: DOM table of final DOMs
         :rtype final_doms: numpy.ndarray
         """
@@ -201,7 +200,7 @@ class Writer(object):
             if key not in requested_doms.keys():
                 requested_doms[key] = None
         final_doms = self.in1d_combined(requested_doms)
-        
+
         utime = default.getint('utime')
         dict_param = {
             't0': default.getint('t0'),
@@ -209,13 +208,13 @@ class Writer(object):
             'n_scalers': default.getint('n_scalers'),
             'scaler_lambda': default.getfloat('scaler_lambda'),
             'start_utime': utime,
-            'current_utimes': np.arange(utime, utime + 
-                                        final_doms.size*payload_step, 
+            'current_utimes': np.arange(utime, utime +
+                                        final_doms.size*payload_step,
                                         payload_step)
         }
-        
+
         control_dict = {}
-        
+
         size_att = config['SIZES']
 #         size, payload_series, payloads = None, None, None
         if 'size' in size_att:
@@ -228,23 +227,23 @@ class Writer(object):
         if 'payloads' in size_att:
             if size_att['payloads'] != 'None':
                 control_dict['payloads'] = int(float(size_att['payloads']))
-        
+
         if not control_dict:
             raise RuntimeError('No file size control specified.')
-        
+
         return dict_param, final_doms, control_dict
-    
-    def arg_param(self, n_scalers=None, scaler_lambda=None, t0=None, 
-                  launch_time=None, requested_doms=None, payload_step=None, 
+
+    def arg_param(self, n_scalers=None, scaler_lambda=None, t0=None,
+                  launch_time=None, requested_doms=None, payload_step=None,
                   n_hits=None, pay_series=None, size_limit=None):
         """Creates parameter dictionary from preset arguments.
-        
+
         :param : See self.makefile() docstring
         :type : See self.makefile() docstring
-        
+
         :return dict_param: Payload parameters
         :rtype dict_param: dict
-        
+
         :return final_doms: DOM table of final DOMs
         :rtype final_doms: numpy.ndarray
         """
@@ -252,13 +251,13 @@ class Writer(object):
             if key not in requested_doms.keys():
                 requested_doms[key] = None
         final_doms = self.in1d_combined(requested_doms)
-    
+
         t0 = int(t0)
         launch_time = int(launch_time)
         n_scalers = int(n_scalers)
         scaler_lambda = float(scaler_lambda)
         utime = int(t0)
-        utimes = np.arange(utime, utime + final_doms.size*payload_step, 
+        utimes = np.arange(utime, utime + final_doms.size*payload_step,
                            payload_step)
         size_limit = int(size_limit)
 
@@ -270,21 +269,21 @@ class Writer(object):
             'start_utime': utime,
             'current_utimes': utimes
         }
-        
+
         control_dict = {}
-        for val, key in zip([size_limit*1e3, n_hits, pay_series], 
+        for val, key in zip([size_limit*1e3, n_hits, pay_series],
                             ['size', 'payloads', 'payload_series']):
             if val is not None:
                 control_dict[key] = val
-        
+
         return dict_params, final_doms, control_dict
 
     def keep_writing(self, control_dict):
         """Determines if payloads should continue to be written to the file.
-        
+
         :param control_dict: File limits (size, payloads, payload series)
         :type control_dict: dict
-        
+
         :return continue_writing: True/False
         :rtype continue_writing: bool
         """
@@ -308,20 +307,20 @@ class Writer(object):
             if self.n_series < payload_series:
                 pay_series_looping = True
             else:
-                pay_series_looping = False 
+                pay_series_looping = False
         looping = [x for x in [size_looping, pay_looping, pay_series_looping]
                    if x is not None]
         return all(looping)
-    
+
     def write_payloads(self, control_dict, final_doms, dict_param):
         """Writes payloads until reaching limit.
-        
+
         :param control_dict: File limits (size, payloads, payload series)
         :type control_dict: dict
-        
+
         :param final_doms: DOM table of final DOMs
         :type final_doms: numpy.ndarray
-        
+
         :param dict_param: Payload parameters
         :type dict_param: dict
         """
@@ -335,7 +334,7 @@ class Writer(object):
                 i, dom = next(itr_dom, (None, None))
             utime = dict_param['start_utime']
             domclock = (utime - dict_param['launch_time'])//250
-            scalers = np.random.poisson(dict_param['scaler_lambda'], 
+            scalers = np.random.poisson(dict_param['scaler_lambda'],
                                         size=dict_param['n_scalers'])
             payload = construct_payload(utime, dom, domclock, scalers, True)
             self.write(payload)
@@ -345,10 +344,10 @@ class Writer(object):
             i, dom = next(itr_dom, (None, None))
             if i is None or dom is None:
                 self.n_series += 1
-                
+
     def status(self, sep=' ', end='\n', file=sys.stdout, flush=False):
         """Print file attributes as summary statement.
-        
+
         :return status_values: File size, number of payloads, number of payload series
         :rtype status_values: str
         """
@@ -373,7 +372,7 @@ class Writer(object):
         :rtype: str
         """
         return self._filename
-    
+
     def write(self, payload):
         """Write DAQ payloads to a file.
         """
@@ -381,24 +380,32 @@ class Writer(object):
 
 
 def construct_payload(utime, dom_id, domclock, scalers, keep_data=True):
-    """Decode and return the next payload.
+    """Create a new SN_Payload
 
-    :param utime: UTC timestamp from year start
-    :type utime: int (8 bytes)
+    Parameters
+    ----------
+    utime : int (uint32)
+        UTC timestamp from year start
+    dom_id : int (uint32)
+        DOM Motherboard ID
+    domclock : int
+        Number of DOM clock cycles elapsed since DOM launch
+    scalers : array_like
+        SN scaler values
+    keep_data : bool
+        If True, construct a payload with all fields
+        If False, construct a payload header only
 
-    :param dom_id: DOM mainboard ID
-    :type dom_id: int (8 bytes)
+    Returns
+    -------
+    payload : sndaq.reader.SN_Payload
+        Custom SN scaler payload
 
-    :param domclock: DOM clock cycles elapsed since launch
-    :type domclock: int (6 bytes)
+    See Also
+    --------
+    sndaq.reader.SN_Payload
 
-    :param scalers: scaler record data
-    :type scalers: tuple(int (1 byte))
-
-    :param keep_data:  If true, write scaler data to SN_Payload, if false scaler data will be written as None
-    :type keep_data: bool
     """
-
     rawdata = struct.pack('>QHH6B{0:d}B'.format(len(scalers)), dom_id, len(scalers) + 10, SN_MAGIC_NUMBER,
                           *domclock.to_bytes(length=6, byteorder='big'), *scalers)
     # > - Big endian
@@ -408,3 +415,24 @@ def construct_payload(utime, dom_id, domclock, scalers, keep_data=True):
     # 6B - 6 integers (1 byte each) - DOM Clock bytes, flds[3:9]
     # {0:d}B - scaler_len integers (1 byte each) - scaler data, flds[9:]
     return SN_Payload(utime, rawdata, keep_data)
+
+
+class SN_PayloadWriter(Writer):
+    """Write SN scaler payloads from a file
+
+    Methods
+    -------
+    write:
+        Write a SN scaler payload to file
+    """
+    def __init__(self, filename: str, overwrite=False):
+        super().__init__(filename, overwrite)
+
+    def write(self, payload):
+        """Write a SN scaler payload to file
+
+        Parameters
+        ----------
+        payload : sndaq.payload.SN_Payload
+        """
+        self._fout.write(payload.record_bytes)
