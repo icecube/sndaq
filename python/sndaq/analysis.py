@@ -175,7 +175,7 @@ class AnalysisHandler(AnalysisConfig):
 
         # minimum size for bg, excl, search, and largest search offset
         self._size = ((self.duration_nosearch + 2*int(max(binnings))) // self.base_binsize) - 1
-        self.buffer_analysis = windowbuffer(size=self._size, ndom=ndom, dtype=dtype)
+        self.buffer_analysis = windowbuffer(size=self._size, ndom=ndom, dtype=np.uint64)
         self._rebin_factor = int(self.base_binsize/self.raw_binsize)
         self.buffer_raw = windowbuffer(size=self._size*self._rebin_factor, ndom=ndom, dtype=dtype)
 
