@@ -278,6 +278,36 @@ class AnalysisHandler(AnalysisConfig):
         analysis.rate += self.buffer_analysis[analysis.idx_exl]
         analysis.rate -= self.buffer_analysis[analysis.idx_sw]
 
+        # Non-linear sums must be implemented as square/cube of sum over 0.5s bins for higher binnings
+        # IE 1.5s binning, square the total count (r_i) in the three 0.5s bins   (r_0 + r_1 + r_2)**2
+        if analysis.rebin_factor == 1:
+            analysis.hit_sum2 += self.buffer_analysis[analysis.idx_ext]**2 + value**2
+            analysis.hit_sum2 -= self.buffer_analysis[analysis.idx_bgl]**2 + self.buffer_analysis[analysis.idx_bgt]**2
+            analysis.n_accum = 0
+
+        elif analysis.n_accum == analysis.rebin_factor:
+            # Analysis idx_ properties point to the lowest index of the region they reference.
+            # Data fills from high index to low index, so lower index elements have been in the buffer longer
+            # So, low index corresponds to low timestamps (rates were measured earlier than rates at high index)
+
+            # Add the sum of `rebin_factor` bins from trailing exclusion zone to trailing background
+            # Add sum of `rebin_factor-1` 0.5s bins and the new 0.5s bin value to leading background
+            analysis.hit_sum2 += (
+                self.buffer_analysis[analysis.idx_ext:analysis.idx_ext+analysis.rebin_factor].sum(axis=0)**2 +
+                (self.buffer_analysis[analysis.idx_eod-(analysis.rebin_factor-1):analysis.idx_eod].sum(axis=0)+value)**2
+            )
+            a = analysis.hit_sum2.mean()
+            b = (analysis.binsize, analysis.offset)
+            c = self.buffer_analysis[analysis.idx_eod-(analysis.rebin_factor-1):analysis.idx_eod].sum(axis=0)+value
+            # Subtract the sum of `rebin_factor` bins from leading background as they enter leading exclusion
+            # Subtract the sum of `rebin_factor` bins from trailing background as they leave the buffer
+            analysis.hit_sum2 -= (
+                self.buffer_analysis[analysis.idx_bgl:analysis.idx_bgl+analysis.rebin_factor].sum(axis=0)**2 +
+                (self.buffer_analysis[analysis.idx_bgt:analysis.idx_bgt+analysis.rebin_factor].sum(axis=0)**2)
+            )
+
+            analysis.n_accum = 0
+
     def update_results(self, analysis):
         """Update SICO analysis results
 
@@ -374,7 +404,7 @@ class AnalysisHandler(AnalysisConfig):
 
         Parameters
         ----------
-        threshold : float
+        threshold : np.ndarray
             Uncorrected xi threshold for issuing a SN trigger alert
         corr_threshold : float
             Corrected xi threshold for issuing a SN trigger alert
@@ -437,9 +467,10 @@ class Analysis(AnalysisConfig):
         self.idx_eod = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # End of data in analysis
 
         # Quantities used to construct trigger
-        self.hit_sum = np.zeros(self._ndom, dtype=dtype)
-        self.hit_sum2 = np.zeros(self._ndom, dtype=dtype)
-        self.rate = np.zeros(self._ndom, dtype=dtype)
+        self.hit_sum = np.zeros(self._ndom, dtype=np.uint64)
+        self.hit_sum2 = np.zeros(self._ndom, dtype=np.uint64)
+        self.rate = np.zeros(self._ndom, dtype=np.uint64)
+        self.n_accum = -int(self.offset / self.base_binsize)  # Trick to ensure sums receive full bins
 
         # Quantities used to evaluate trigger
         self.dmu = 0.
@@ -506,7 +537,7 @@ class Analysis(AnalysisConfig):
             Variance of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
-        return (self.nbin_bg * self.hit_sum2 - self.hit_sum**2) / self.nbin_bg**2
+        return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum**2)) / self.nbin_bg**2
 
     @property
     def std(self):
@@ -541,6 +572,17 @@ class Analysis(AnalysisConfig):
             Time offset of analysis window in ms, by default in increments of 500 ms
         """
         return self._offset
+
+    @property
+    def rebin_factor(self):
+        """Rebinning factor (Ratio of binsize to base_binsize)
+
+        Returns
+        -------
+        rebin_factor: int
+            Rebinning factor
+        """
+        return self._rebin_factor
 
     @property
     def duration(self):
