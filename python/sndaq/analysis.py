@@ -13,8 +13,10 @@ class AnalysisConfig:
     _base_binsize = 500  # ms
     _dur_leading_bg = int(300e3)  # ms
     _dur_trailing_bg = int(300e3)  # ms
-    _dur_leading_excl = int(15e3)  # ms
-    _dur_trailing_excl = int(15e3)  # ms
+    _dur_leading_excl = int(30e3)  # ms
+    _dur_trailing_excl = int(30e3)  # ms
+    # _dur_leading_excl = int(15e3)  # ms
+    # _dur_trailing_excl = int(15e3)  # ms
 
     def __init__(self, raw_binsize=None, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
         """
@@ -193,7 +195,8 @@ class AnalysisHandler(AnalysisConfig):
         self._accum_data = np.zeros(ndom, dtype=dtype)
 
         # Define trigger handler
-        self._n = 0
+        # TODO Remove _n
+        # self._n = 0
         # TODO: Move to Alert Handler
         self.trigger_pending = False
         self.trigger_xi = 0.
@@ -230,7 +233,10 @@ class AnalysisHandler(AnalysisConfig):
         """
         for analysis in self.analyses:
             self.update_sums(analysis, value)
-            if self.istriggerable(analysis):
+            # If n_accum is 0, then a new bin was added to the sums, and results can be updated
+            # TODO: Enable results reporting ASAP - can analysis idx be defined s.t.
+            #  that n_accum == 0 when analysis first becomes becomes triggerable
+            if self.istriggerable(analysis) and analysis.n_accum == 0:
                 self.update_results(analysis)
 
     def istriggerable(self, analysis):
@@ -248,7 +254,7 @@ class AnalysisHandler(AnalysisConfig):
             If true, the background buffers have filled and analysis is issuing triggers.
             If False, the background buffer have not yet filled.
         """
-        return self._n >= analysis.n_to_trigger
+        return self.buffer_analysis.n >= analysis.n_to_trigger
 
     def update_sums(self, analysis, value):
         """Update SICO analysis sums
@@ -262,13 +268,14 @@ class AnalysisHandler(AnalysisConfig):
         """
         # Analysis sums are updated by the handler b/c the handler has access to buffers whereas analysis objects do not
         # TODO: May want to add check eventually if asymmetric bg/excl window is used
-        analysis.hit_sum += self.buffer_analysis[analysis.idx_exl] + value
-        analysis.hit_sum -= self.buffer_analysis[analysis.idx_bgl] + self.buffer_analysis[analysis.idx_bgt]
+        # Add rate from trailing exclusion and new value, subtract from leading & trailing background
 
-        analysis.hit_sum2 += self.buffer_analysis[analysis.idx_exl]**2 + value**2
-        analysis.hit_sum2 -= self.buffer_analysis[analysis.idx_bgl]**2 + self.buffer_analysis[analysis.idx_bgt]**2
+        analysis.n_accum += 1
+        # Linear sums can be implemented as sum over 0.5 bins, even for higher binnings
+        analysis.hit_sum += self.buffer_analysis[analysis.idx_ext] + value
+        analysis.hit_sum -= (self.buffer_analysis[analysis.idx_bgl] + self.buffer_analysis[analysis.idx_bgt])
 
-        analysis.rate += self.buffer_analysis[analysis.idx_ext]
+        analysis.rate += self.buffer_analysis[analysis.idx_exl]
         analysis.rate -= self.buffer_analysis[analysis.idx_sw]
 
     def update_results(self, analysis):
@@ -355,8 +362,9 @@ class AnalysisHandler(AnalysisConfig):
             # There's almost certainly a better way to do this.
             accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
             self.reset_accumulator()
-            if not self.buffer_analysis.filled:
-                self._n += 1
+            # TODO: Remove _n
+            # if not self.buffer_analysis.filled:
+            #     self._n += 1
             self.update_analyses(accumulated_data)
             self.buffer_analysis.append(accumulated_data)
 
@@ -408,11 +416,11 @@ class Analysis(AnalysisConfig):
             Data type for SN scaler arrays
         """
         super().__init__()
-        if binsize % self.base_binsize:
+        if (binsize % self.base_binsize) > 0:  # Binsize must be an integer multiple of base_binsize
             raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {self.base_binsize:d} ms')
         self._binsize = binsize  # ms
         self._offset = offset  # ms
-        self._rebinfactor = self._binsize / self.base_binsize
+        self._rebin_factor = int(self._binsize / self.base_binsize)
         # TODO: Decide if ndom should always be 5160 or the number of doms in the current config
         self._ndom = ndom
 
@@ -420,12 +428,13 @@ class Analysis(AnalysisConfig):
         self._nbin_background = (self._dur_leading_bg + self._dur_trailing_bg) / self._binsize
 
         # Indices for accessing data buffer, all point to first column in respective region
-        # TODO: Check alignment so all start filling at the same time, looks like they may stop filling at same time
-        self._idx_bgl = idx  # Leading background window
-        self._idx_exl = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # Leading exclusion
-        self._idx_sw = self._idx_exl + int(self.dur_leading_excl/self.base_binsize)  # Search window
-        self._idx_ext = self._idx_sw + int(self._binsize/self.base_binsize)  # Trailing exclusion
-        self._idx_bgt = self._idx_ext + int(self.dur_trailing_excl/self.base_binsize)  # Trailing background
+        # TODO: Check alignment so all start filling as soon as possible
+        self._idx_bgt = idx  # Trailing background
+        self._idx_ext = self._idx_bgt + int(self.dur_trailing_bg/self.base_binsize)  # Trailing exclusion
+        self._idx_sw = self._idx_ext + int(self.dur_trailing_excl/self.base_binsize)  # Search window
+        self._idx_exl = self._idx_sw + int(self._binsize/self.base_binsize)  # Leading exclusion
+        self._idx_bgl = self._idx_exl + int(self.dur_leading_excl/self.base_binsize)  # Leading background
+        self.idx_eod = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # End of data in analysis
 
         # Quantities used to construct trigger
         self.hit_sum = np.zeros(self._ndom, dtype=dtype)
@@ -438,9 +447,9 @@ class Analysis(AnalysisConfig):
         self.xi = 0.
         self.chi2 = 0.
 
-        # Quantities used to evaluate when analysis is ready to issue triggers
-        # Assumes second BG window to be filled
-        self.n_to_trigger = self.idx_bgt + int(self.dur_trailing_bg / self.base_binsize)
+        # Quantities used to evaluate when analysis is ready to start forming sums and issuing triggers
+        # Analysis becomes triggerable when trailing background has filled
+        self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / self.base_binsize)
 
     @property
     def nbin_nosearch(self):
