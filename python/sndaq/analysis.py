@@ -175,8 +175,11 @@ class AnalysisHandler(AnalysisConfig):
         self._eps = eps
         self._dtype = dtype
 
-        # minimum size for bg, excl, search, and largest search offset
-        self._size = ((self.duration_nosearch + 2*int(max(binnings))) // self.base_binsize) - 1
+        # Size is computed so the following may be included in buffer
+        #   Leading/trailing background and exclusion windows, and search window (duration_nosearch + max(binnings))
+        #   Max analysis offset (max(binnings) - base_binsize)
+        #   Rates to subtract from buffer during analysis (max(binnings))
+        self._size = ((self.duration_nosearch + 3*int(max(binnings))) // self.base_binsize) - 1
         self.buffer_analysis = windowbuffer(size=self._size, ndom=ndom, dtype=np.uint64)
         self._rebin_factor = int(self.base_binsize/self.raw_binsize)
         self.buffer_raw = windowbuffer(size=self._size*self._rebin_factor, ndom=ndom, dtype=dtype)
@@ -232,7 +235,7 @@ class AnalysisHandler(AnalysisConfig):
             ndom-length array of binned hits to be added to SICO analysis sums
         """
         for analysis in self.analyses:
-            self.update_sums(analysis, value)
+            self.update_sums(analysis)
             # If n_accum is 0, then a new bin was added to the sums, and results can be updated
             # TODO: Enable results reporting ASAP - can analysis idx be defined s.t.
             #  that n_accum == 0 when analysis first becomes becomes triggerable
@@ -256,7 +259,7 @@ class AnalysisHandler(AnalysisConfig):
         """
         return self.buffer_analysis.n >= analysis.n_to_trigger
 
-    def update_sums(self, analysis, value):
+    def update_sums(self, analysis):  # Assumes call after value has been appended to buffer
         """Update SICO analysis sums
 
         Parameters
@@ -266,47 +269,29 @@ class AnalysisHandler(AnalysisConfig):
         value : numpy.ndarray
             ndom-length array of binned hits to be added to SICO analysis sums
         """
-        # Analysis sums are updated by the handler b/c the handler has access to buffers whereas analysis objects do not
-        # TODO: May want to add check eventually if asymmetric bg/excl window is used
-        # Add rate from trailing exclusion and new value, subtract from leading & trailing background
-
+        # IMPORTANT!! ASSUMES VALUES ARE APPENDED TO BUFFER **BEFORE** `update_sums` IS CALLED!!
         analysis.n_accum += 1
-        # Linear sums can be implemented as sum over 0.5 bins, even for higher binnings
-        analysis.hit_sum += self.buffer_analysis[analysis.idx_ext] + value
-        analysis.hit_sum -= (self.buffer_analysis[analysis.idx_bgl] + self.buffer_analysis[analysis.idx_bgt])
 
-        analysis.rate += self.buffer_analysis[analysis.idx_exl]
-        analysis.rate -= self.buffer_analysis[analysis.idx_sw]
+        if analysis.n_accum == analysis.rebin_factor:
+            add_to_bgl = self.buffer_analysis[analysis.idx_addbgl].sum(axis=0)
+            sub_from_bgl = self.buffer_analysis[analysis.idx_subbgl].sum(axis=0)
 
-        # Non-linear sums must be implemented as square/cube of sum over 0.5s bins for higher binnings
-        # IE 1.5s binning, square the total count (r_i) in the three 0.5s bins   (r_0 + r_1 + r_2)**2
-        if analysis.rebin_factor == 1:
-            analysis.hit_sum2 += self.buffer_analysis[analysis.idx_ext]**2 + value**2
-            analysis.hit_sum2 -= self.buffer_analysis[analysis.idx_bgl]**2 + self.buffer_analysis[analysis.idx_bgt]**2
+            add_to_bgt = self.buffer_analysis[analysis.idx_addbgt].sum(axis=0)
+            sub_from_bgt = self.buffer_analysis[analysis.idx_subbgt].sum(axis=0)
+
+            add_to_sw = self.buffer_analysis[analysis.idx_addsw].sum(axis=0)
+            sub_from_sw = self.buffer_analysis[analysis.idx_subsw].sum(axis=0)
+
+            analysis.rate += add_to_sw
+            analysis.rate -= sub_from_sw
+
+            analysis.hit_sum += add_to_bgl + add_to_bgt
+            analysis.hit_sum -= (sub_from_bgl + sub_from_bgt)
+
+            analysis.hit_sum2 += (add_to_bgl**2 + add_to_bgt**2)
+            analysis.hit_sum2 -= (sub_from_bgl**2 + sub_from_bgt**2)
             analysis.n_accum = 0
 
-        elif analysis.n_accum == analysis.rebin_factor:
-            # Analysis idx_ properties point to the lowest index of the region they reference.
-            # Data fills from high index to low index, so lower index elements have been in the buffer longer
-            # So, low index corresponds to low timestamps (rates were measured earlier than rates at high index)
-
-            # Add the sum of `rebin_factor` bins from trailing exclusion zone to trailing background
-            # Add sum of `rebin_factor-1` 0.5s bins and the new 0.5s bin value to leading background
-            analysis.hit_sum2 += (
-                self.buffer_analysis[analysis.idx_ext:analysis.idx_ext+analysis.rebin_factor].sum(axis=0)**2 +
-                (self.buffer_analysis[analysis.idx_eod-(analysis.rebin_factor-1):analysis.idx_eod].sum(axis=0)+value)**2
-            )
-            a = analysis.hit_sum2.mean()
-            b = (analysis.binsize, analysis.offset)
-            c = self.buffer_analysis[analysis.idx_eod-(analysis.rebin_factor-1):analysis.idx_eod].sum(axis=0)+value
-            # Subtract the sum of `rebin_factor` bins from leading background as they enter leading exclusion
-            # Subtract the sum of `rebin_factor` bins from trailing background as they leave the buffer
-            analysis.hit_sum2 -= (
-                self.buffer_analysis[analysis.idx_bgl:analysis.idx_bgl+analysis.rebin_factor].sum(axis=0)**2 +
-                (self.buffer_analysis[analysis.idx_bgt:analysis.idx_bgt+analysis.rebin_factor].sum(axis=0)**2)
-            )
-
-            analysis.n_accum = 0
 
     def update_results(self, analysis):
         """Update SICO analysis results
@@ -466,11 +451,22 @@ class Analysis(AnalysisConfig):
         self._idx_bgl = self._idx_exl + int(self.dur_leading_excl/self.base_binsize)  # Leading background
         self.idx_eod = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # End of data in analysis
 
+        # Indices of buffer for "bins" to add to sums for analysis
+        # Using np.arange here (np arrays as indices) allows all analyses to be indexed in the same way
+        # It's important to compute this only once, as these indices will never change for a given analysis
+        self._idx_addbgl = np.arange(self.idx_eod-self.rebin_factor, self.idx_eod)  # Add to bgl
+        self._idx_subbgl = np.arange(self.idx_bgl-self.rebin_factor, self.idx_bgl)  #
+        self._idx_addbgt = np.arange(self.idx_ext-self.rebin_factor, self.idx_ext)
+        self._idx_subbgt = np.arange(self.idx_bgt-self.rebin_factor, self.idx_bgt)
+        self._idx_addsw = np.arange(self.idx_exl-self.rebin_factor, self.idx_exl)
+        self._idx_subsw = np.arange(self.idx_sw-self.rebin_factor, self.idx_sw)
+
         # Quantities used to construct trigger
         self.hit_sum = np.zeros(self._ndom, dtype=np.uint64)
         self.hit_sum2 = np.zeros(self._ndom, dtype=np.uint64)
         self.rate = np.zeros(self._ndom, dtype=np.uint64)
-        self.n_accum = -int(self.offset / self.base_binsize)  # Trick to ensure sums receive full bins
+        self.n_accum = -int(self.offset / self.base_binsize)
+        # Setting n_accum this way ensures the analysis is has a full time bin when these quantities are first updated
 
         # Quantities used to evaluate trigger
         self.dmu = 0.
@@ -649,3 +645,39 @@ class Analysis(AnalysisConfig):
         Index of first column in trailing background window
         """
         return self._idx_bgt
+
+    @property
+    def idx_addbgl(self):
+        """Indices to add to leading background during binned analysis
+        """
+        return self._idx_addbgl
+
+    @property
+    def idx_subbgl(self):
+        """Indices to subtract from leading background during binned analysis
+        """
+        return self._idx_subbgl
+
+    @property
+    def idx_addbgt(self):
+        """Indices to add to trailing background during binned analysis
+        """
+        return self._idx_addbgt
+
+    @property
+    def idx_subbgt(self):
+        """Indices to subtract from trailing background during binned analysis
+        """
+        return self._idx_subbgt
+
+    @property
+    def idx_addsw(self):
+        """Indices to add to search window during binned analysis
+        """
+        return self._idx_addsw
+
+    @property
+    def idx_subsw(self):
+        """Indices to subtract from search window during binned analysis
+        """
+        return self._idx_subsw
