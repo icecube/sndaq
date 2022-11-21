@@ -72,8 +72,7 @@ class windowbuffer(sndaqbuffer):
             self._reset()
         self._data[self._idx, :] = entry
         self._idx += 1
-        if not self.filled:
-            self._n += 1
+        self._n += 1
         return self
 
     def clear(self):

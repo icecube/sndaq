@@ -178,13 +178,19 @@ class AnalysisHandler(AnalysisConfig):
         else:
             self._eps = eps
         self._dtype = dtype
+        self._starttime = starttime
+
+        if dropped_doms is not None:
+            self._eps = np.delete(self._eps, dropped_doms, axis=0)
+            self._ndom -= dropped_doms.size
+            # TODO: check for compatibility between self._ndom and ndom argument when dropped doms are present
 
         # Size is computed so the following may be included in buffer
         #   Leading/trailing background and exclusion windows, and search window (duration_nosearch + max(binnings))
         #   Max analysis offset (max(binnings) - base_binsize)
         #   Rates to subtract from buffer during analysis (max(binnings))
         self._size = ((self.duration_nosearch + 3*int(max(binnings))) // self.base_binsize) - 1
-        self.buffer_analysis = windowbuffer(size=self._size, ndom=ndom, dtype=np.uint64)
+        self.buffer_analysis = windowbuffer(size=self._size, ndom=self._ndom, dtype=np.uint64)
         self._rebin_factor = int(self.base_binsize/self.raw_binsize)
         self.buffer_raw = windowbuffer(size=self._size*self._rebin_factor, ndom=ndom, dtype=dtype)
 
@@ -194,7 +200,7 @@ class AnalysisHandler(AnalysisConfig):
             for offset in np.arange(0, binning, 500, dtype=dtype):
                 idx = int(self._size - (self.duration_nosearch + offset + binning)/self.base_binsize)
                 self.analyses.append(
-                    Analysis(binning, offset, idx=idx, ndom=ndom)
+                    Analysis(binning, offset, idx=idx, ndom=self._ndom)
                 )
 
         # Define counter for accumulation used in rebinning from raw to base analysis
@@ -208,6 +214,14 @@ class AnalysisHandler(AnalysisConfig):
         self.trigger_pending = False
         self.trigger_xi = 0.
         self.triggered_analysis = None
+
+    @property
+    def ndom(self):
+        return self._ndom
+
+    @property
+    def current_time(self):
+        return self._starttime + self.buffer_analysis.n * 0.5
 
     @property
     def eps(self):
