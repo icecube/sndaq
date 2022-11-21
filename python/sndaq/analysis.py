@@ -483,8 +483,7 @@ class Analysis(AnalysisConfig):
         self.hit_sum = np.zeros(self._ndom, dtype=np.uint64)
         self.hit_sum2 = np.zeros(self._ndom, dtype=np.uint64)
         self.rate = np.zeros(self._ndom, dtype=np.uint64)
-        self.n_accum = -int(self.offset / self.base_binsize)
-        # Setting n_accum this way ensures the analysis is has a full time bin when these quantities are first updated
+        self.n_accum = 0
 
         # Quantities used to evaluate trigger
         self.dmu = 0.
