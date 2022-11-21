@@ -153,7 +153,8 @@ class AnalysisHandler(AnalysisConfig):
         Update SICO analysis sums
 
     """
-    def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, eps=np.ones(5160, dtype=float), dtype=np.uint16):
+    def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, eps=None, dtype=np.uint16,
+                 starttime=0, dropped_doms=None):
         """Create Analysis Handler
 
         Parameters
@@ -172,7 +173,10 @@ class AnalysisHandler(AnalysisConfig):
         # Create shared window buffer
         self._binnings = binnings
         self._ndom = ndom
-        self._eps = eps
+        if eps is None:
+            self._eps = np.where(np.arange(5160) > 4800, np.ones(5160), 1.35*np.ones(5160))
+        else:
+            self._eps = eps
         self._dtype = dtype
 
         # Size is computed so the following may be included in buffer
