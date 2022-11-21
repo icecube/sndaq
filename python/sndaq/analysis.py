@@ -2,6 +2,7 @@
 """
 import numpy as np
 from sndaq.buffer import windowbuffer
+from sndaq.trigger import BasicTrigger, Trigger
 
 
 class AnalysisConfig:
@@ -17,6 +18,9 @@ class AnalysisConfig:
     _dur_trailing_excl = int(30e3)  # ms
     # _dur_leading_excl = int(15e3)  # ms
     # _dur_trailing_excl = int(15e3)  # ms
+    _dur_trigger_window = int(30e3)
+    _trigger_level = BasicTrigger
+    # _trigger_level.threshold = 5.8
 
     def __init__(self, raw_binsize=None, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
         """
@@ -208,12 +212,25 @@ class AnalysisHandler(AnalysisConfig):
         self._accum_data = np.zeros(ndom, dtype=dtype)
 
         # Define trigger handler
-        # TODO Remove _n
-        # self._n = 0
         # TODO: Move to Alert Handler
-        self.trigger_pending = False
+        self.current_trigger = Trigger()
+        # self.trigger_pending = False
         self.trigger_xi = 0.
         self.triggered_analysis = None
+        self._n_bins_trigger_window = int(self._dur_trigger_window/self.base_binsize)
+
+    @property
+    def trigger_pending(self):
+        return self.buffer_analysis.n <= self._n_trigger_close
+
+    @trigger_pending.setter
+    def trigger_pending(self, value):
+        # TODO: Make this functionality into a "extend window" function
+        # This may be a horribly counter-intuitive way of doing this...
+        # The intent is to be able to easily reset the trigger_pending condition without having to manage any counters
+        if isinstance(value, bool):
+            if value:
+                self._n_trigger_close = self.buffer_analysis.n + self._n_bins_trigger_window
 
     @property
     def ndom(self):
@@ -244,7 +261,7 @@ class AnalysisHandler(AnalysisConfig):
         for i, analysis in enumerate(self.analyses):
             print(f'{i:d} {analysis.binsize*1e-3:4.1f} (+{analysis.offset*1e-3:4.1f})')
 
-    def update_analyses(self, value):
+    def update_analyses(self):
         """Update SICO sums and computed quantities for all analyses
 
         Parameters
@@ -254,28 +271,11 @@ class AnalysisHandler(AnalysisConfig):
         """
         for analysis in self.analyses:
             self.update_sums(analysis)
-            # If n_accum is 0, then a new bin was added to the sums, and results can be updated
-            # TODO: Enable results reporting ASAP - can analysis idx be defined s.t.
-            #  that n_accum == 0 when analysis first becomes becomes triggerable
-            if self.istriggerable(analysis) and analysis.n_accum == 0:
-                self.update_results(analysis)
 
-    def istriggerable(self, analysis):
-        """Indicates analysis is ready to trigger
-
-        Parameters
-        ----------
-        analysis : sndaq.analysis.Analysis
-            Analysis object for which to check triggering status. An analysis will (currently) only issue triggers if
-            its background windows have filled with data.
-
-        Returns
-        -------
-        istriggerable : bool
-            If true, the background buffers have filled and analysis is issuing triggers.
-            If False, the background buffer have not yet filled.
-        """
-        return self.buffer_analysis.n >= analysis.n_to_trigger
+            if analysis.is_updatable:
+                if analysis.is_online:
+                    self.update_results(analysis)
+                analysis.reset_accum()  # Reset "updatable" counter TODO: Rename this to be more consistent
 
     def update_sums(self, analysis):  # Assumes call after value has been appended to buffer
         """Update SICO analysis sums after new data has been added to the buffer
@@ -287,8 +287,10 @@ class AnalysisHandler(AnalysisConfig):
         """
         # IMPORTANT!! ASSUMES VALUES ARE APPENDED TO BUFFER **BEFORE** `update_sums` IS CALLED!!
         analysis.n_accum += 1
+        if not analysis.is_online:
+            analysis.n += 1  # Update until analysis.is_online returns true
 
-        if analysis.n_accum == analysis.rebin_factor:
+        if analysis.is_updatable:
             # TODO: Find better names for these
             add_to_bgl = self.buffer_analysis[analysis.idx_addbgl].sum(axis=0)
             sub_from_bgl = self.buffer_analysis[analysis.idx_subbgl].sum(axis=0)
@@ -409,14 +411,9 @@ class AnalysisHandler(AnalysisConfig):
             if not self.trigger_pending:
                 self.trigger_pending = True
 
-            # Check for other triggers in other search windows
-            # TODO: Figure out how SNDAQ checks for triggers in other search windows
-            if xi.max > self.trigger_xi:
-                self.trigger_xi = xi.max
-                self.triggered_analysis = self.analyses[xi.argmax()]
-
-        # Issue alert (Definitely out of intended scope)
-        # Reset trigger state (Probably out of intended scope)
+    @property
+    def trigger_finalized(self):
+        return self.current_trigger.xi > 0 and not self.trigger_pending
 
 
 class Analysis(AnalysisConfig):
@@ -485,7 +482,47 @@ class Analysis(AnalysisConfig):
         # Quantities used to evaluate when analysis is ready to start forming sums and issuing triggers
         # Analysis becomes triggerable when trailing background has filled
         self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / self.base_binsize)
+        self.n = 0
 
+    def reset_accum(self):
+        self.n_accum = 0
+
+    @property
+    def is_online(self):
+        """Indicates whether analysis has received enough data to form triggers (both bkg buffers have filled)
+        This prevents triggering before an estimate of the background rate can be formed
+
+        Returns
+        -------
+        is_online : bool
+            If true, the background buffers have filled and analysis ready to issue triggers.
+            If False, the background buffer have not yet filled.
+        """
+        return self.n >= self.n_to_trigger
+
+    @property
+    def is_updatable(self):
+        """Indicates whether analysis has received enough data to update its analysis quantities
+
+        Returns
+        -------
+        is_online : bool
+            If true, enough data has been received, and the analysis quantities are ready to be updated
+            If False, the background buffer have not yet filled.
+        """
+        return self.n_accum == self.rebin_factor
+
+    @property
+    def is_triggerable(self):
+        """Indicates whether analysis has received enough data to fill the current time bin
+
+        Returns
+        -------
+        is_online : bool
+            If true,
+            If False, less than `self._binsize` data has been received
+        """
+        return self.n_accum == 0
 
     @property
     def nbin_nosearch(self):
