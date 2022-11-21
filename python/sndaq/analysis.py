@@ -400,15 +400,8 @@ class AnalysisHandler(AnalysisConfig):
             self.buffer_analysis.append(accumulated_data)
 
     # TODO: Move this to Alert handler
-    def check_for_triggers(self, threshold=8.4, corr_threshold=5.8):
+    def check_for_triggers(self):
         """Check if any analysis meets the basic trigger condition.
-
-        Parameters
-        ----------
-        threshold : np.ndarray
-            Uncorrected xi threshold for issuing a SN trigger alert
-        corr_threshold : float
-            Corrected xi threshold for issuing a SN trigger alert
         """
         # Probably out of intended scope for analysis object
         xi = np.array((ana.xi for ana in self.analyses))
