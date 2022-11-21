@@ -263,11 +263,6 @@ class AnalysisHandler(AnalysisConfig):
 
     def update_analyses(self):
         """Update SICO sums and computed quantities for all analyses
-
-        Parameters
-        ----------
-        value : numpy.ndarray
-            ndom-length array of binned hits to be added to SICO analysis sums
         """
         for analysis in self.analyses:
             self.update_sums(analysis)
@@ -309,7 +304,6 @@ class AnalysisHandler(AnalysisConfig):
 
             analysis.hit_sum2 += (add_to_bgl**2 + add_to_bgt**2)
             analysis.hit_sum2 -= (sub_from_bgl**2 + sub_from_bgt**2)
-            analysis.n_accum = 0
 
     def update_results(self, analysis):
         """Update SICO analysis results
@@ -382,6 +376,7 @@ class AnalysisHandler(AnalysisConfig):
         self._accum_count = self._rebin_factor
 
     def update(self, value):
+        # TODO: Figure out how to enable streaming only analysis-binning data
         """Update raw buffer, analysis buffer, analyses sums and analysis results
 
         Parameters
@@ -395,11 +390,8 @@ class AnalysisHandler(AnalysisConfig):
             # There's almost certainly a better way to do this.
             accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
             self.reset_accumulator()
-            # TODO: Remove _n
-            # if not self.buffer_analysis.filled:
-            #     self._n += 1
-            self.update_analyses(accumulated_data)
             self.buffer_analysis.append(accumulated_data)
+            self.update_analyses()
 
     def process_triggers(self):
         """Check if any analysis meets the basic trigger condition.
