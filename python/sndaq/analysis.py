@@ -401,15 +401,25 @@ class AnalysisHandler(AnalysisConfig):
             self.update_analyses(accumulated_data)
             self.buffer_analysis.append(accumulated_data)
 
-    # TODO: Move this to Alert handler
-    def check_for_triggers(self):
+    def process_triggers(self):
         """Check if any analysis meets the basic trigger condition.
+
         """
         # Probably out of intended scope for analysis object
-        xi = np.array((ana.xi for ana in self.analyses))
-        if np.any(xi > threshold) or np.any(xi > corr_threshold):
-            if not self.trigger_pending:
-                self.trigger_pending = True
+        xi = np.array([ana.xi if (ana.is_online and ana.is_triggerable) else 0
+                       for ana in self.analyses])
+        xi_max = xi.max()
+        # TODO: Figure out how to optimize this with ana.is_online/is_triggerable - there's a lot of wasted time here
+        # This is built to execute every time the analysis buffer updates, maybe this could be called when the analyses
+        # are updated.
+        # Muon Correction is not implemented yet, should this be performed *after* highest uncorr trigger is found?
+
+        if xi_max >= self._trigger_level.threshold and xi_max > self.current_trigger.xi:
+            idx = xi.argmax()
+            ana = self.analyses[idx]
+            t = (self.buffer_analysis.n - ana.n_to_trigger) * 0.5
+            self.trigger_pending = True
+            self.current_trigger = Trigger(xi=ana.xi, xi_corr=0, t=t, binsize=ana.binsize, offset=ana.offset)
 
     @property
     def trigger_finalized(self):
