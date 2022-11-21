@@ -4,14 +4,13 @@ import numpy as np
 from abc import ABC, abstractmethod
 
 
-class TriggerLevel(ABC):
+class _TriggerLevel(ABC):
     """Base Class for PySNDAQ Trigger levels, can be used to define additional trigger levels
     """
 
-    def __init__(self, name=None, threshold=np.inf, threshold_corr=np.inf):
-        self._name = name
-        self._threshold = threshold  # Uncorrected
-        self._threshold_corr = threshold_corr  # Corrected
+    name = None
+    threshold = np.inf  # Uncorrected
+    threshold_corr = np.inf  # Corrected
 
     @classmethod
     @abstractmethod
@@ -19,18 +18,6 @@ class TriggerLevel(ABC):
         """Process PySNDAQ Supernova Trigger
         """
         pass
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def threshold(self):
-        return self._threshold
-
-    @property
-    def threshold_corr(self):
-        return self._threshold_corr
 
     def __hash__(self):
         return hash((self.name, self.threshold, self.threshold_corr))
@@ -43,26 +30,25 @@ class TriggerLevel(ABC):
 
 # Experimenting with escalating trigger scheme. The idea is you would init the highest matching trigger class, and the
 #    processing would propagate down to lower level triggers, executing from high -> low threshold
-class BasicTrigger(TriggerLevel):
+class BasicTrigger(_TriggerLevel):
     """Basic Trigger
     """
-
-    _name = 'basic'
-    _threshold = 4.0
-    _threshold_corr = 6.0
+    name = 'basic'
+    threshold = 4.0
+    threshold_corr = 6.0
 
     @classmethod
     def process(cls, trigger):
         print('Basic Trigger Processing...')
+        print(trigger)
 
 
-class SNWGTrigger(TriggerLevel):
+class SNWGTrigger(_TriggerLevel):
     """Supernova Working Group (Internal) Trigger
     """
-
-    _name = 'sn-wg'
-    _threshold = 7.0
-    _threshold_corr = 4.4
+    name = 'sn-wg'
+    threshold = 7.0
+    threshold_corr = 4.4
 
     @classmethod
     def process(cls, trigger):
@@ -70,13 +56,12 @@ class SNWGTrigger(TriggerLevel):
         BasicTrigger.process(trigger)
 
 
-class SNEWSTrigger(TriggerLevel):
+class SNEWSTrigger(_TriggerLevel):
     """SNEWS (External) Trigger
     """
-
-    _name = 'snews'
-    _threshold = 8.4
-    _threshold_corr = 5.8
+    name = 'snews'
+    threshold = 8.4
+    threshold_corr = 5.8
 
     @classmethod
     def process(cls, trigger):
@@ -84,13 +69,12 @@ class SNEWSTrigger(TriggerLevel):
         SNWGTrigger.process(trigger)
 
 
-class SilverTrigger(TriggerLevel):
+class SilverTrigger(_TriggerLevel):
     """'Silver' Trigger
     """
-
-    _name = 'silver'
-    _threshold = 8.0
-    _threshold_corr = 8.0
+    name = 'silver'
+    threshold = 8.0
+    threshold_corr = 8.0
 
     @classmethod
     def process(cls, trigger):
@@ -98,12 +82,12 @@ class SilverTrigger(TriggerLevel):
         SNEWSTrigger.process(trigger)
 
 
-class GoldTrigger(TriggerLevel):
+class GoldTrigger(_TriggerLevel):
     """'Gold' Trigger
     """
-    _name = 'gold'
-    _threshold = 10.0
-    _threshold_corr = 10.0
+    name = 'gold'
+    threshold = 10.0
+    threshold_corr = 10.0
 
     @classmethod
     def process(cls, trigger):
@@ -170,7 +154,7 @@ class TriggerHandler(TriggerConfig):
 class Trigger:
     """Container object for SNDAQ Trigger Candidate
     """
-    def __init__(self, xi, xi_corr=0, t=0):
+    def __init__(self, xi=0, xi_corr=0, t=0, binsize=None, offset=None):
         # Parameters
         # ----------
         # threshold : np.ndarray
@@ -188,7 +172,39 @@ class Trigger:
             SNDAQ muon-corrected TS
         t : float
             Time of trigger (Time of bin at trailing edge of AnalysisHandler.buffer_analysis search window)
+        binsize : float
+            Size of analysis search window in ms from which the trigger was issued
+        offset : float
+            Offset of search window in ms from which the trigger was issued
         """
         self.xi = xi
         self.xi_corr = xi_corr
         self.t = t
+        self.binsize = binsize
+        self.offset = offset
+
+    def __repr__(self):
+        return f"xi={self.xi:5.3f} in {self.binsize / 1e3:>5.1f} +({self.offset / 1e3}) s Analysis @t={self.t} s"
+
+    def reset(self):
+        self.xi = 0
+        self.xi_corr = 0
+        self.t = 0
+        self.binsize = None
+        self.offset = None
+
+    # @classmethod
+    # def from_analysis(cls, ana, time):
+    #     """Create a trigger object from a sndaq.analysis.Analysis object
+    #
+    #     Parameters
+    #     ----------
+    #     ana : sndaq.analysis.Analysis
+    #
+    #     Returns
+    #     -------
+    #     Trigger : sndaq.trigger.Trigger
+    #
+    #     """
+    #     return cls.__init__(ana.xi, 0, ana.time, ana.binsize,  )
+
