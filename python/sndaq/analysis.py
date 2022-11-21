@@ -278,19 +278,18 @@ class AnalysisHandler(AnalysisConfig):
         return self.buffer_analysis.n >= analysis.n_to_trigger
 
     def update_sums(self, analysis):  # Assumes call after value has been appended to buffer
-        """Update SICO analysis sums
+        """Update SICO analysis sums after new data has been added to the buffer
 
         Parameters
         ----------
         analysis : sndaq.analysis.Analysis
             Analysis object for which to update sums
-        value : numpy.ndarray
-            ndom-length array of binned hits to be added to SICO analysis sums
         """
         # IMPORTANT!! ASSUMES VALUES ARE APPENDED TO BUFFER **BEFORE** `update_sums` IS CALLED!!
         analysis.n_accum += 1
 
         if analysis.n_accum == analysis.rebin_factor:
+            # TODO: Find better names for these
             add_to_bgl = self.buffer_analysis[analysis.idx_addbgl].sum(axis=0)
             sub_from_bgl = self.buffer_analysis[analysis.idx_subbgl].sum(axis=0)
 
@@ -309,7 +308,6 @@ class AnalysisHandler(AnalysisConfig):
             analysis.hit_sum2 += (add_to_bgl**2 + add_to_bgt**2)
             analysis.hit_sum2 -= (sub_from_bgl**2 + sub_from_bgt**2)
             analysis.n_accum = 0
-
 
     def update_results(self, analysis):
         """Update SICO analysis results
@@ -494,6 +492,7 @@ class Analysis(AnalysisConfig):
         # Quantities used to evaluate when analysis is ready to start forming sums and issuing triggers
         # Analysis becomes triggerable when trailing background has filled
         self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / self.base_binsize)
+
 
     @property
     def nbin_nosearch(self):
