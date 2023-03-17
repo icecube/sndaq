@@ -211,10 +211,7 @@ class AnalysisHandler(AnalysisConfig):
         self._accum_count = self._rebin_factor
         self._accum_data = np.zeros(ndom, dtype=dtype)
 
-        # Define trigger handler
-        # TODO: Move to Alert Handler
         self.current_trigger = Trigger()
-        # self.trigger_pending = False
         self.trigger_xi = 0.
         self.triggered_analysis = None
         self._n_bins_trigger_window = int(self._dur_trigger_window/self.base_binsize)
@@ -240,11 +237,15 @@ class AnalysisHandler(AnalysisConfig):
 
     @property
     def ndom(self):
+        """Number of DOMs contributing to Analyses
+        """
         return self._ndom
 
     @property
     def current_time(self):
-        return self._starttime + self.buffer_analysis.n * 0.5
+        """Timestamp of data entering the analysis buffer
+        """
+        return self._starttime + self.buffer_analysis.n * self._base_binsize / 1e3
 
     @property
     def eps(self):
@@ -343,8 +344,10 @@ class AnalysisHandler(AnalysisConfig):
 
         Parameters
         ----------
-        val : numpy.ndarray
+        val : numpy.ndarray of int
             ndom-length array of 2 ms scaler hits to be accumulated into higher order binnings.
+        idx : numpy.ndarray of int
+            Indices of DOMs at which to add 2 ms scaler hits
 
         Returns
         -------
@@ -392,8 +395,9 @@ class AnalysisHandler(AnalysisConfig):
         """
         self.buffer_raw.append(value)
         idx = value.nonzero()[0]
-        if not self.accumulate(value[idx], idx):  # Accumulator indicates time to reset, as base analysis bin of data is ready
-            # There's almost certainly a better way to do this.
+        if not self.accumulate(value[idx], idx):
+            # Accumulator indicates time to reset, as base analysis bin of data is ready
+            # TODO: Find a more intuitive way of doing this.
             accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
             self.reset_accumulator()
             self.buffer_analysis.append(accumulated_data)
@@ -401,16 +405,14 @@ class AnalysisHandler(AnalysisConfig):
 
     def process_triggers(self):
         """Check if any analysis meets the basic trigger condition.
-
         """
         # Probably out of intended scope for analysis object
         xi = np.array([ana.xi if (ana.is_online and ana.is_triggerable) else 0
                        for ana in self.analyses])
-        xi_max = xi.max()
+        xi_max = xi.max(initial=0.0)
         # TODO: Figure out how to optimize this with ana.is_online/is_triggerable - there's a lot of wasted time here
         # This is built to execute every time the analysis buffer updates, maybe this could be called when the analyses
         # are updated.
-        # Muon Correction is not implemented yet, should this be performed *after* highest uncorr trigger is found?
 
         # Check uncorr. xi against lowest threshold (uncorr. or corr.) to initiate trigger processing
         if xi_max >= self._trigger_level.threshold and xi_max > self.current_trigger.xi:
@@ -438,7 +440,7 @@ class Analysis(AnalysisConfig):
     """Descriptor object to handle data access and algorithms for SNDAQ sico-analysis
 
     """
-    def __init__(self, binsize, offset, idx=0, ndom=5160, dtype=np.uint16):
+    def __init__(self, binsize, offset, idx=0, ndom=5160):
         """Create Analysis object
 
         Parameters
@@ -451,8 +453,6 @@ class Analysis(AnalysisConfig):
             Starting index in analysis buffer, includes time offset
         ndom : int
             Number of DOMs contributing to the analysis
-        dtype
-            Data type for SN scaler arrays
         """
         super().__init__()
         if (binsize % self.base_binsize) > 0:  # Binsize must be an integer multiple of base_binsize
@@ -503,6 +503,8 @@ class Analysis(AnalysisConfig):
         self.n = 0
 
     def reset_accum(self):
+        """Reset Analysis accumulator sums after collecting 500 ms of data
+        """
         self.n_accum = 0
 
     @property
