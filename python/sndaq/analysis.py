@@ -218,19 +218,25 @@ class AnalysisHandler(AnalysisConfig):
         self.trigger_xi = 0.
         self.triggered_analysis = None
         self._n_bins_trigger_window = int(self._dur_trigger_window/self.base_binsize)
+        self._n_trigger_close = 0
 
     @property
     def trigger_pending(self):
+        """Boolean indicating whether a trigger candidate is currently pending. SNDAQ will check for higher triggers for
+        up to `_n_bins_trigger_window` bins worth of time (default 30s)
+        """
         return self.buffer_analysis.n <= self._n_trigger_close
 
-    @trigger_pending.setter
-    def trigger_pending(self, value):
-        # TODO: Make this functionality into a "extend window" function
-        # This may be a horribly counter-intuitive way of doing this...
-        # The intent is to be able to easily reset the trigger_pending condition without having to manage any counters
-        if isinstance(value, bool):
-            if value:
-                self._n_trigger_close = self.buffer_analysis.n + self._n_bins_trigger_window
+    def open_trigger_window(self):
+        """Open a 30 s time window for a pending trigger. After 30s worth of data is added to buffer, the window closes.
+
+        See Also: trigger_pending
+
+        Note: An "open" trigger window refers to the state where SNDAQ will overwrite the current trigger with another
+        of higher significance, a "closed" window refer to the state where the current trigger may not be overwritten.
+        Calling this function before a window closes will extend it for 30 s.
+        """
+        self._n_trigger_close = self.buffer_analysis.n + self._n_bins_trigger_window
 
     @property
     def ndom(self):
@@ -406,15 +412,25 @@ class AnalysisHandler(AnalysisConfig):
         # are updated.
         # Muon Correction is not implemented yet, should this be performed *after* highest uncorr trigger is found?
 
+        # Check uncorr. xi against lowest threshold (uncorr. or corr.) to initiate trigger processing
         if xi_max >= self._trigger_level.threshold and xi_max > self.current_trigger.xi:
+
+            # Extend trigger window after new highest trigger
+            self.open_trigger_window()
             idx = xi.argmax()
             ana = self.analyses[idx]
             t = (self.buffer_analysis.n - ana.n_to_trigger) * 0.5
-            self.trigger_pending = True
+
+            # Corrected signi is set upon trigger becoming finalized
             self.current_trigger = Trigger(xi=ana.xi, xi_corr=0, t=t, binsize=ana.binsize, offset=ana.offset)
 
     @property
     def trigger_finalized(self):
+        """Indicator for whether the currently pending trigger is ready for processing
+            If True, the trigger is ready to be processed, the trigger window (`open_trigger_window()`) is closed
+            If False, the trigger window has not yet closed, more data must be processed
+        """
+        # TODO: Make muon correction contigent upon this condition
         return self.current_trigger.xi > 0 and not self.trigger_pending
 
 
