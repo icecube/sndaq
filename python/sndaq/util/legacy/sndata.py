@@ -180,38 +180,47 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
         with tf.extractfile(f'sndaq_{run_no}.log') as log_file:
             lines = log_file.readlines()
 
-    def cands_from_log(lines):
+    def cands_from_log(_lines):
         """Simple filter to obtain candidate info from raw text of log file
         """
-        for line in lines:
-            if b'candidate' in line:
-                yield line
+        for _line in _lines:
+            if b'candidate' in _line or b'Significance corrected' in _line:
+                yield _line
 
     data = []
+    rgx_trigger_no = "(?<=New\ trigger \#)[0-9]+"
+    rgx_cand_no = "(?<=candidate \#)[0-9]+"
+    rgx_ana_no = "(?<=Analysis \#)[0-9]+"
+    rgx_xi = "(?<=S=)[0-9].[0-9]+"
+    rgx_xi_corrected = "(?<=Significance corrected from: )[0-9].[0-9]+ to [0-9].[0-9]+"  # Combined with check for 'Significance corrected' below
+    rgx_time = "(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
     for line in cands_from_log(lines):
-        rgx_trigger_no = "(?<=New\ trigger \#)[0-9]+"
-        rgx_cand_no = "(?<=candidate \#)[0-9]+"
-        rgx_ana_no = "(?<=Analysis \#)[0-9]+"
-        rgx_xi = "(?<=S=)[0-9].[0-9]+"
-        rgx_time = "(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
+        if b'Significance corrected' not in line:
+            trigger_no = int(re.search(rgx_trigger_no, line.decode()).group())
+            cand_no = int(re.search(rgx_cand_no, line.decode()).group())
+            ana_no = int(re.search(rgx_ana_no, line.decode()).group())
+            xi = float(re.search(rgx_xi, line.decode()).group())
+            log_time, trigger_time = re.findall(rgx_time, line.decode())
 
-        trigger_no = int(re.search(rgx_trigger_no, line.decode()).group())
-        cand_no = int(re.search(rgx_cand_no, line.decode()).group())
-        ana_no = int(re.search(rgx_ana_no, line.decode()).group())
-        xi = float(re.search(rgx_xi, line.decode()).group())
-        log_time, trigger_time = re.findall(rgx_time, line.decode())
+            current = {
+                'time': np.datetime64(trigger_time),
+                'xi': xi,
+                'ana': ana_no,
+                'trigger': trigger_no,
+                'cand': cand_no
+            }
 
-        current = {
-            'time': np.datetime64(trigger_time),
-            'xi': xi,
-            'ana': ana_no,
-            'trigger': trigger_no,
-            'cand': cand_no
-        }
-        if data and data[-1]['cand'] == cand_no:
-            data[-1].update(current)
-        else:
-            data.append(current)
+            if data and data[-1]['cand'] == cand_no:
+                data[-1].update(current)
+            else:
+                data.append(current)
+
+        else:  # Assumes correction messages always follows trigger messages, and that no new candidates form between
+            # Trigger window closing (trigger becomes finalized) and when correction completes.
+            xi, xip = (float(x) for x in re.search(rgx_xi_corrected, line.decode()).group().split(' to '))
+            if abs(data[-1]['xi'] - xi)/xi > 1e-4:
+                raise ValueError(f'Error getting corrected xi for candidate {data[-1]["cand"]}')
+            data[-1].update({'xip': xip})
 
     if debug:
         return data, lines
