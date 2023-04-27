@@ -322,9 +322,9 @@ def _sndaq_mad(x):
     erroneously pads the input array with one 0 element.
     This has been incldued for the sake of comparison
     """
-    median = sndaq_median(x)
+    median = _sndaq_median(x)
     y = np.append(x, [0])
-    return sndaq_median(np.abs(y - median))
+    return _sndaq_median(np.abs(y - median))
 
 
 def combine_cands(cand_live, cand_log, cand_data, *, tol=1e-5, verbose=False, use_sndaq_method=True):
@@ -410,9 +410,13 @@ def combine_cands(cand_live, cand_log, cand_data, *, tol=1e-5, verbose=False, us
                     f"{'log':^12}| {xi_log:10.5f} | {xip_log:10.5f}",
                     '-' * 39
                 ])
-            else:
-                err_str = ''
-            raise ValueError(f"Candidate {i:<3d} has differing xi' greater than tolerance!\n" + err_str)
+                print(err_str)
+
+            # If not using the SNDAQ method, the majority of candidates will differ from their reported values
+            # by an amount greater than the default tolerance. This is due partly b/c SNDAQ's calculation was performed
+            # in error since BT13 (2015). For now (04/27/2023), don't error if this check fails
+            if use_sndaq_method:  # TODO: Clean this up
+                raise ValueError(f"Candidate {i:<3d} has differing xi' greater than tolerance!\n")
 
         data.append({
             'trigger_time': log['time'],
@@ -425,3 +429,33 @@ def combine_cands(cand_live, cand_log, cand_data, *, tol=1e-5, verbose=False, us
             'muon_rates': rate.astype(np.uint16)
         })
     return data
+
+
+def n_ana_to_desc(n):
+    """Convert SNDAQ Analysis Number to binsize (+offset) description
+
+    Parameters
+    ----------
+    n : int
+        SNDAQ Analysis number
+
+    Returns
+    -------
+    desc : string
+        SNDAQ Analysis description
+    """
+    if n == 1:
+        binning = 0.5
+        offset = 0
+    elif n in range(2, 5):
+        binning = 1.5
+        offset = (n - 2) * 0.5
+    elif n in range(5, 13):
+        binning = 4.0
+        offset = (n - 5) * 0.5
+    elif n in range(13, 33):
+        binning = 10
+        offset = (n - 10) * 0.5
+    else:
+        raise ValueError('Unrecognized Analysis number, expected n in [1, 32]')
+    return f"{binning:>4.1f} s (+{offset:<3.1f} s)"
