@@ -11,8 +11,9 @@ import uproot
 import datetime as dt
 import numpy as np
 
-_url_run_info = "https://hercules.icecube.wisc.edu/run_info/"
-_url_moni = "https://hercules.icecube.wisc.edu/moni_access/"
+# Change virgo to live when running in production
+_url_run_info = "https://virgo.icecube.wisc.edu/run_info/"
+_url_moni = "https://virgo.icecube.wisc.edu/moni_access/"
 
 
 def check_cred(USER, PASS):
