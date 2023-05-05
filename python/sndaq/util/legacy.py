@@ -11,8 +11,9 @@ import uproot
 import datetime as dt
 import numpy as np
 
-_url_run_info = "https://hercules.icecube.wisc.edu/run_info/"
-_url_moni = "https://hercules.icecube.wisc.edu/moni_access/"
+# Change virgo to live when running in production
+_url_run_info = "https://virgo.icecube.wisc.edu/run_info/"
+_url_moni = "https://virgo.icecube.wisc.edu/moni_access/"
 
 
 def check_cred(USER, PASS):
@@ -266,3 +267,195 @@ def get_cands_from_sndata(sndata_path):
                     data.append({"cand_no": idx_cand+1})
                 data[idx_cand].update({cand_type: val})
     return data
+
+
+def _sndaq_median(x):
+    """Obtain Median of an array exactly as SNDAQ would.
+    This mimics the behavior of ROOT TMath::Median()
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Array for which to find the median
+
+    Returns
+    -------
+    median : float
+        Median of array x
+
+    Notes
+    -----
+    The documentation for TMath::Median() indicates
+    that for an array with size n>1000, the single element
+    x[x.size//2] is returned in all cases. This is not
+    reflected by the implementation of TMath::Median().
+    (Currently, ROOT v6.26)
+    """
+    y = np.sort(x)
+    n = x.size
+    idx = n // 2
+
+    if n % 2:
+        return y[idx]
+    else:
+        return y[idx - 1:idx + 1].mean()
+
+
+def _sndaq_mad(x):
+    """Obtain Median Absolute Deviation (MAD) of an array
+    exactly as SNDAQ would. This mimics the behavior of
+    SNDAQ's Sni3TriggerSubtractor::getMAD()
+
+    Parameters
+    ----------
+    x : numpy.ndarray
+        Array for which to find the MAD
+
+    Returns
+    -------
+    mad : float
+        Median absolute deviation of array x
+
+    Notes
+    -----
+    SNDAQ's Implementation of this calculation
+    erroneously pads the input array with one 0 element.
+    This has been incldued for the sake of comparison
+    """
+    median = _sndaq_median(x)
+    y = np.append(x, [0])
+    return _sndaq_median(np.abs(y - median))
+
+
+def combine_cands(cand_live, cand_log, cand_data, *, tol=1e-5, verbose=False, use_sndaq_method=True):
+    """Combine candidates obtained from the available legacy sources
+
+    Parameters
+    ----------
+    cand_live : list of dict
+        Dictionaries containing SN candidates from Live
+    cand_log :list of dict
+        Dictionaries containing SN candidates from SNDAQ logs
+    cand_data : list of dict
+        Dictionaries containing SN candidates from SN Data
+    tol : float
+        Tolerance for difference between SN candidate significances
+    verbose : bool
+        If True, include debug information on candidates in disagreement between sources
+    use_sndaq_method : bool
+        If True, compute median and MAD using SNDAQ methods
+        If False, compute median and MAD using pure numpy
+
+    Returns
+    --------
+    data : list of dict
+        List of dictionaries containing summary information on candidates
+
+    See Also
+    --------
+    sndaq.util.legacy.get_cands_from_live
+    sndaq.util.legacy.get_cands_from_log
+    sndaq.util.legacy.get_cands_from_sndata
+    """
+    try:
+        assert (len(cand_live) == len(cand_log) == len(cand_data))
+    except AssertionError:
+        raise ValueError("Candidate sources must have equal lengths,"
+                         f"given ({len(cand_live)} {len(cand_log)} {len(cand_data)}")
+    data = []
+    for i, (live, log, sndata) in enumerate(zip(cand_live, cand_log, cand_data)):
+        xi_live = live['value']
+        xi_log = log['xi']
+        xip_log = log['xip']
+
+        rate, signi = sndata['Corr'].values()
+        idx_sndaq = np.abs(signi - xi_log).argmin()
+        xi_sndaq = signi[idx_sndaq]
+
+        # Log contains 'correct' xi_prime, neither of the other sources do
+        diff_live = np.abs((xi_log - xi_live) / xi_log)
+        diff_sndaq = np.abs((xi_log - xi_sndaq) / xi_log)
+
+        try:
+            assert (diff_live < tol and diff_sndaq < tol)
+        except AssertionError:
+            raise ValueError(f"Candidate {i:<3d} has differing xi greater than tolerance!")
+
+        if use_sndaq_method:
+            median = _sndaq_median(rate)
+            mad = _sndaq_mad(rate)
+        else:
+            median = np.median(rate)
+            mad = np.median(np.abs(rate - median))
+
+        lower = median - 3 * mad
+        upper = rate.max() + 1
+        cut = (lower <= rate) & (rate < upper)
+
+        a, b = np.polyfit(rate[cut], signi[cut], deg=1)
+        xip_sndaq = xi_sndaq - a * rate[idx_sndaq] - b
+
+        try:
+            diff_xip = np.abs((xip_sndaq - xip_log) / xip_log)
+            assert (diff_xip < tol)
+        except AssertionError:
+            if verbose:
+                err_str = '\n'.join([
+                    f"Cand #{i + 1} (Ana.{log['ana']}) \tdelta_xip={diff_xip:8.6f} ({diff_xip * 100:5.3f}%)",
+                    f" n={signi.size} ({signi[cut].size})\n median={median}\n MAD={mad}\n bounds={(lower, upper)}",
+                    f" a={a:10.7f}\n b={b:10.7f} \n rate={rate[idx_sndaq]}",
+                    f"{'':^12}|{'xi':^12}|{'xi_prime':^12}",
+                    '-' * 39,
+                    f"{'sndaq':^12}| {xi_sndaq:10.5f} | {xip_sndaq:10.5f}",
+                    f"{'log':^12}| {xi_log:10.5f} | {xip_log:10.5f}",
+                    '-' * 39
+                ])
+                print(err_str)
+
+            # If not using the SNDAQ method, the majority of candidates will differ from their reported values
+            # by an amount greater than the default tolerance. This is due partly b/c SNDAQ's calculation was performed
+            # in error since BT13 (2015). For now (04/27/2023), don't error if this check fails
+            if use_sndaq_method:  # TODO: Clean this up
+                raise ValueError(f"Candidate {i:<3d} has differing xi' greater than tolerance!\n")
+
+        data.append({
+            'trigger_time': log['time'],
+            'nh_alert_time': live['time'],
+            'xi': xi_sndaq,
+            'xip': xip_sndaq,
+            'ana': log['ana'],
+            'trigger_no': log['trigger'],
+            'cand_no': log['cand'],
+            'muon_rates': rate.astype(np.uint16)
+        })
+    return data
+
+
+def n_ana_to_desc(n):
+    """Convert SNDAQ Analysis Number to binsize (+offset) description
+
+    Parameters
+    ----------
+    n : int
+        SNDAQ Analysis number
+
+    Returns
+    -------
+    desc : string
+        SNDAQ Analysis description
+    """
+    if n == 1:
+        binning = 0.5
+        offset = 0
+    elif n in range(2, 5):
+        binning = 1.5
+        offset = (n - 2) * 0.5
+    elif n in range(5, 13):
+        binning = 4.0
+        offset = (n - 5) * 0.5
+    elif n in range(13, 33):
+        binning = 10
+        offset = (n - 10) * 0.5
+    else:
+        raise ValueError('Unrecognized Analysis number, expected n in [1, 32]')
+    return f"{binning:>4.1f} s (+{offset:<3.1f} s)"
