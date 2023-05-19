@@ -10,6 +10,8 @@ import tarfile
 import uproot
 import datetime as dt
 import numpy as np
+import glob
+import pathlib as pl
 
 # Change virgo to live when running in production
 _url_run_info = "https://virgo.icecube.wisc.edu/run_info/"
@@ -267,6 +269,170 @@ def get_cands_from_sndata(sndata_path):
                     data.append({"cand_no": idx_cand+1})
                 data[idx_cand].update({cand_type: val})
     return data
+
+
+def get_sndata_dwh_path(run_no, USER_live, PASS_live):
+    """Get expected path to SN Data file in IceCube Data WareHouse (dwh)
+
+    Parameters
+    ----------
+    run_no : int
+        Run number from which to obtain the log
+        See /data/exp/IceCube/monitoring/sn/... for SNDAQ logs
+    USER_live : str
+        IceCube LDAP username for i3Live request
+    PASS_live : str
+        IceCube LDAP Password for i3Live request
+
+    Returns
+    -------
+    sndata_path : str
+        Path to SN Data file(s) for requested run
+        NOTE: This path will include a wild card for subruns
+    """
+    run_info = get_run_info(run_no, USER_live, PASS_live)
+    fmt = "%Y-%m-%d %H:%M:%S"
+    run_start = dt.datetime.strptime(run_info['start'], fmt)
+    run_stop = dt.datetime.strptime(run_info['stop'], fmt)
+
+    next_year_start = dt.datetime(year=run_start.year + 1, month=1, day=1)
+
+    # If run stops less than 20 minutes from end of year
+    if (next_year_start - run_stop).seconds < 1200:
+        sndata_path = f"/data/exp/IceCube/{run_stop.year + 1}" \
+                      f"/internal-system/sndaq/0101" \
+                      f"/sndata_{run_no}_*.tar.gz"
+    else:
+        sndata_path = f"/data/exp/IceCube/{run_stop.year}" \
+                      f"/internal-system/sndaq/{run_stop.month:02d}{run_stop.day:02d}" \
+                      f"/sndata_{run_no}_*.tar.gz"
+    return sndata_path
+
+
+def get_sndata_file(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='./', *, download=False):
+    """Get SN Data file(s) for specific run
+
+    Parameters
+    ----------
+    run_no : int
+        Run number from which to obtain the log
+        See /data/exp/IceCube/monitoring/sn/... for SNDAQ logs
+    USER_live : str
+        IceCube LDAP username for i3Live request
+    PASS_live : str
+        IceCube LDAP Password for i3Live request
+    USER_ldap : str
+        IceCube LDAP username for data warehouse access
+    cache_dir : str or PathLike
+        Location to store SNDAQ log file locally
+        Defaults to current directory
+    download : bool
+        Switch to force download of SN Data file
+
+    Returns
+    -------
+    sndata_glob : list of str
+        List of paths to SN Data files for the requested run
+    """
+    sndata_path_dwh = get_sndata_dwh_path(run_no, USER_live, PASS_live)
+    sndata_path_local = os.path.join(cache_dir, f"{os.path.basename(sndata_path_dwh)}")
+
+    if not os.path.exists(cache_dir):
+        raise FileNotFoundError(f"Missing Directory: {cache_dir}")
+
+    # If the SN Data file is not found locally, attempt to download it
+    contents = glob.glob(sndata_path_local)
+    if not contents:
+        print(f'Unable to find any files matching: {sndata_path_local}\n' +
+              f"Attempting to download SN Data file(s): {os.path.basename(sndata_path_dwh)}")
+        if not download:
+            raise ValueError('Download aborted. Set keyword argument ' +
+                             '`download=true` to attempt download.')
+
+        cmd_str = f'rsync -PavL {USER_ldap}@data.icecube.wisc.edu:' \
+                  f'{sndata_path_dwh} {os.path.dirname(sndata_path_local)}'
+        os.system(cmd_str)
+        contents = glob.glob(sndata_path_local)
+    else:
+        print(f"Found SN Data file(s): {', '.join(contents)}")
+        for idx, file in enumerate(contents):
+            if ''.join(pl.Path(file).suffixes) == '.tar.gz':
+                rootfile = os.path.basename(os.path.relpath(file).split('.')[0])+'.root'
+                if os.path.exists(os.path.join(cache_dir, rootfile)):
+                    print(f'Replaced tarfile `{os.path.basename(file)}` with ROOT file `{os.path.basename(rootfile)}`')
+                    contents[idx] = os.path.join(cache_dir, rootfile)
+    return contents
+
+
+def get_background_rate_estimate(sndata_file, n=10, filter_rates=True):
+    """Get estimated Mean and Sigma for IC80 and DeepCore DOMs from SN
+
+    Parameters
+    ----------
+    sndata_file : str or path-like
+        Path to SN Data file (either .tar.gz or .root)
+    n : int
+        Number of samples to take, to obtain the estimate
+    filter_rates : bool
+        Switch to exclude DOMs that reported no rates (True) or include them (False).
+
+    Returns
+    -------
+    param_i3 : tuple of float
+        The parameters (mu, sigma) of a Normal dist estimating IC80 DOM background rates
+    param_dc : tuple of float
+        The parameters (mu, sigma) of a Normal dist estimating DeepCore DOM background rates
+    """
+    # Open files and setup `files` variable to properly close them before returning
+    if ''.join(pl.Path(sndata_file).suffixes) == '.tar.gz':
+        print(f"Found tarfile {sndata_file}.\n(This may take a while, providing a "
+              "path to a SN Data ROOT file for argument `sndata_file` will be faster)")
+        base_name = os.path.basename(os.path.relpath(sndata_file).split('.')[0])
+        rootfile = os.path.splitext(base_name)[0] + '.root'
+
+        tf = tarfile.open(sndata_file, 'r')
+        sndata = uproot.open(tf.extractfile(rootfile))
+        files = [sndata, tf]
+    else:
+        sndata = uproot.open(sndata_file)
+        files = [sndata]
+
+    # Setup quantities needed for estimation
+    sn_rate_500ms = sndata['sn_all/sn_all_data/data']
+    nbins = sn_rate_500ms.num_entries
+    chunksize = 1000
+    mu_i3 = np.zeros(int(n))
+    mu_dc = np.zeros(int(n))
+    sig_i3 = np.zeros(int(n))
+    sig_dc = np.zeros(int(n))
+
+    # This is the safest way to obtain the indices of DeepCore (dc) vs IC80 (i3) DOMs
+    idx_i3 = np.where(sndata['config/detector'].member('Efficiency') == 1.00)[0]
+    idx_dc = np.where(sndata['config/detector'].member('Efficiency') == 1.35)[0]
+
+    for idx_sample, idx_sndata in enumerate(np.random.randint(nbins - chunksize, size=int(n))):
+        rates_500ms = sn_rate_500ms.array(entry_start=idx_sndata, entry_stop=idx_sndata + chunksize).to_numpy()
+        # Include only DOMs that actually contribute
+        # sndata['config/detector'].member('BadChannelIDSet') *should* contain this, but is incomplete
+        if filter_rates:
+            idx_dom = np.where(np.all(rates_500ms > 0, axis=0))[0]
+        else:
+            idx_dom = np.arange(rates_500ms.shape[1])
+
+        idx_i3_sample = idx_dom[np.in1d(idx_dom, idx_i3)]
+        idx_dc_sample = idx_dom[np.in1d(idx_dom, idx_dc)]
+
+        mu_i3[idx_sample] = rates_500ms[:, idx_i3_sample].mean()
+        sig_i3[idx_sample] = rates_500ms[:, idx_i3_sample].std(axis=0).mean()
+        mu_dc[idx_sample] = rates_500ms[:, idx_dc_sample].mean()
+        sig_dc[idx_sample] = rates_500ms[:, idx_dc_sample].std(axis=0).mean()
+
+    for file in files:
+        file.close()
+
+    param_i3 = mu_i3.mean() / 0.5, sig_i3.mean() / np.sqrt(0.5)
+    param_dc = mu_dc.mean() / 0.5, sig_dc.mean() / np.sqrt(0.5)
+    return param_i3, param_dc
 
 
 def _sndaq_median(x):
