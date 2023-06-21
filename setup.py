@@ -47,7 +47,7 @@ setup_keywords['zip_safe'] = False
 setup_keywords['packages'] = find_packages('python')
 setup_keywords['package_dir'] = {'': 'python'}
 setup_keywords['cmdclass'] = {'version': SetVersion, 'sdist': DistutilsSdist}
-
+setup_keywords['test_suite'] = 'sndaq.tests.sndaq_test_suite.sndaq_test_suite'
 
 requires = []
 optionals = {}
