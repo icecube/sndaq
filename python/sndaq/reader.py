@@ -6,8 +6,8 @@ import gzip
 import numbers
 import os
 import struct
-from datetime import datetime
-from sndaq.datetime_ns import datetime_ns
+import numpy as np
+import itertools as it
 
 SN_TYPE_ID = 16
 SN_ENVELOPE_LENGTH = 16
@@ -459,7 +459,7 @@ class PDAQ_PayloadReader(Reader):
         """
         super().__init__(filename, filetype='pdaqtrigger', keep_data=keep_data)
 
-    def __next__(self):
+    def __iter__(self):
         """Read the next payload
 
         Returns
@@ -470,8 +470,11 @@ class PDAQ_PayloadReader(Reader):
         :rtype: PDAQ_Payload
         """
         payload = self.decode_payload(self._fin)
-        self._num_read += 1
-        return payload
+        while payload:
+            if payload:
+                self._num_read += 1
+                yield payload
+            payload = self.decode_payload(self._fin)
 
     @classmethod
     def decode_payload(cls, stream, keep_data=True):
@@ -492,6 +495,34 @@ class PDAQ_PayloadReader(Reader):
             If keep_data = False, returns trigger timestamp only
 
         """
+        line = stream.readline().strip()
+        if len(line) == 0:
+            return None
+
+        date, time_ns, rmu = line.split()
+        if keep_data:
+            return np.datetime64('T'.join((date, time_ns)), 'ns'), int(rmu)
+        return np.datetime64('T'.join((date, time_ns)), 'ns')
+
+    def read_payloads(self, n_payloads=None):
+        """
+
+        Parameters
+        ----------
+        n_payloads : int
+            Number of payloads to read. If fewer than `n_payloads` remain, read to EOF.
+
+        Returns
+        -------
+        payloads : np.ndarray
+            Array of pdaq trigger payloads
+        """
+        dtype = [('t', 'datetime64[ns]'), ('rmu', int)]
+        if n_payloads is None:
+            return np.array([pay for pay in self], dtype=dtype)
+        else:
+            return np.array(list(it.islice((pay for pay in self if pay), n_payloads)), dtype=dtype)
+
 
 
 def read_file(filename, max_payloads):

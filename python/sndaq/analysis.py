@@ -1,8 +1,33 @@
 """Analysis objects for performing SNDAQ SICO analysis
 """
 import numpy as np
+from configparser import ConfigParser
+import ast  # TODO: Replace with pyyaml
 from sndaq.buffer import windowbuffer
-from sndaq.trigger import BasicTrigger, Trigger
+from sndaq.trigger import PrimaryTrigger, Trigger
+
+_ana_conf_repr_string = \
+    """Analysis Configuration
+======================
+| 
+| Buffer Configuration
+| --------------------
+| Use Offsets : {use_offsets}
+| Use Rebins : {use_rebins}
+| Trailing Background (ms): [ -{bgt_shifted_t0}, -{duration_ext_ms} ]
+| Trailing Exclusion (ms): [ -{duration_ext_ms}, 0 ]
+| Search Windows (ms): {binsize_ms}
+| Leading Exclusion (ms): [ t_sw, t_sw + {duration_exl_ms} ]
+| Leading Background (ms): [ t_sw + {duration_exl_ms}, t_sw + {bgl_shifted_t1} ] 
+|
+| .. t_sw = search window upper bin edge
+| 
+| DOM Qualification
+| -----------------
+| Rate: [{min_bkg_rate}, {max_bkg_rate}]
+| Fano Factor: [{min_bkg_fano}, {max_bkg_fano}]
+| Abs. Skew < {max_bkg_abs_skew}
+"""
 
 
 class AnalysisConfig:
@@ -12,47 +37,97 @@ class AnalysisConfig:
     # TODO: Documentation (Figure) or fix to Buffer indexing needed
     _raw_binsize = 2  # ms
     _base_binsize = 500  # ms
-    _dur_leading_bg = int(300e3)  # ms
-    _dur_trailing_bg = int(300e3)  # ms
-    _dur_leading_excl = int(30e3)  # ms
-    _dur_trailing_excl = int(30e3)  # ms
-    # _dur_leading_excl = int(15e3)  # ms
-    # _dur_trailing_excl = int(15e3)  # ms
+    _duration_bgl_ms = int(300e3)  # ms (5 min)
+    _duration_bgt_ms = int(300e3)  # ms (5 min)
+    _duration_exl_ms = int(30e3)  # ms (30 s)
+    _duration_ext_ms = int(30e3)  # ms (30 s)
+    _dur_signi_buffer = int(600e3)  # ms (10 min)
     _dur_trigger_window = int(30e3)
-    _trigger_level = BasicTrigger
+    _trigger_level = PrimaryTrigger
+
     # _trigger_level.threshold = 5.8
 
-    def __init__(self, raw_binsize=None, base_binsize=None, dur_bgl=None, dur_bgt=None, dur_exl=None, dur_ext=None):
+    def __init__(self, use_offsets, use_rebins, binsize_ms,
+                 duration_bgl_ms, duration_bgt_ms, duration_exl_ms, duration_ext_ms,
+                 min_active_doms=None, min_bkg_rate=None, max_bkg_rate=None,
+                 min_bkg_fano=None, max_bkg_fano=None, max_bkg_abs_skew=None):
         """
+        Parameters
+        ----------
+        use_offsets : bool
+            Switch to use multiple analyses offset by the smallest binsize
+        use_rebins : bool
+            Switch to perform analysis on rebinned buffer or base buffer
+        binsize_ms : int or list of int
+            Duration(s) of search window(s) in ms at which to perform the analysis
+        duration_bgl_ms : int
+            Duration of leading background window in ms
+        duration_bgt_ms : int
+            Duration of trailing background window in ms
+        duration_exl_ms : int
+            Duration of leading exclusion window in ms
+        duration_ext_ms : int
+            Duration of trailing exclusion window in ms
+        min_active_doms : int
+            Mininum number of qualified DOMs required to perform Analysis
+        min_bkg_rate : float
+            Minimum tolerable DOM background rate
+        max_bkg_rate : float
+            Maximum tolerable DOM background rate
+        min_bkg_fano : float
+            Minimum tolerable DOM background Fano factor
+        max_bkg_fano : float
+            Maximum tolerable DOM background Fano factor
+        max_bkg_abs_skew : float
+            Maximum tolerable DOM background absolute skew
+        """
+        self.use_offsets = use_offsets
+        self.use_rebins = use_rebins
+        self.binsize_ms = binsize_ms
+        self.duration_bgl_ms = duration_bgl_ms
+        self.duration_bgt_ms = duration_bgt_ms
+        self.duration_exl_ms = duration_exl_ms
+        self.duration_ext_ms = duration_ext_ms
+        self.min_active_doms = min_active_doms
+        self.min_bkg_rate = min_bkg_rate
+        self.max_bkg_rate = max_bkg_rate
+        self.min_bkg_fano = min_bkg_fano
+        self.max_bkg_fano = max_bkg_fano
+        self.max_bkg_abs_skew = max_bkg_abs_skew
+
+    def __repr__(self):
+        kwargs = vars(self)
+        kwargs.update({"bgl_shifted_t1": self.duration_bgl_ms + self.duration_exl_ms,
+                       "bgt_shifted_t0": self.duration_bgt_ms + self.duration_ext_ms})
+        return _ana_conf_repr_string.format(**kwargs)
+
+    @classmethod
+    def from_config(cls, conf=None, conf_path=None):
+        """Initialize AnalysisConfig from Config or Config file
 
         Parameters
         ----------
-        raw_binsize : int
-            Size of input scalar data time bins
-        base_binsize : int
-            Size of base analysis time bins in ms
-        dur_bgl :
-            Duration of leading background window in ms
-        dur_bgt :
-            Duration of trailing background window in ms
-        dur_exl :
-            Duration of leading exclusion window in ms
-        dur_ext :
-            Duration of trailing exclusion window in ms
+        conf : configparser.ConfigParser
+            Analysis configuration
+        conf_path :
+            Path to file containing analysis configuration
         """
-        # TODO: Define these using ConfigParser
-        if raw_binsize is not None:
-            AnalysisConfig._raw_binsize = raw_binsize
-        if base_binsize is not None:
-            AnalysisConfig._base_binsize = base_binsize
-        if dur_bgl is not None:
-            AnalysisConfig._dur_leading_bg = dur_bgl  # ms
-        if dur_bgt is not None:
-            AnalysisConfig._dur_trailing_bg = dur_bgt  # ms
-        if dur_exl is not None:
-            AnalysisConfig._dur_leading_excl = dur_exl  # ms
-        if dur_ext is not None:
-            AnalysisConfig._dur_trailing_excl = dur_ext  # ms
+        if conf is None and conf_path is None:
+            raise ValueError("Missing configuration")
+        elif conf is None and conf_path is not None:
+            conf = ConfigParser()
+            conf.read(conf_path)
+
+        conf_dict = {key: ast.literal_eval(val) for key, val in conf['binned_search'].items()}
+        try:
+            return cls(**conf_dict)
+        except TypeError as err:
+            msg = str(err)
+            bad_field = msg.split('\'')[-2]
+            if "required positional argument" in msg:
+                raise TypeError(f"Config.: {conf} is missing a required field: '{bad_field}'") from err
+            elif "got an unexpected keyword argument" in msg:
+                raise TypeError(f"Config.: {conf} contains an unexpected field: '{bad_field}'") from err
 
     @property
     def duration_nosearch(self):
@@ -63,7 +138,7 @@ class AnalysisConfig:
         duration : int
             Duration of analysis window including background and exclusion blocks in ms
         """
-        return self.dur_leading_bg + self.dur_leading_excl + self.dur_trailing_bg + self.dur_trailing_excl
+        return self.duration_bgl_ms + self.duration_ext_ms + self.duration_bgt_ms + self.duration_ext_ms
 
     @property
     def raw_binsize(self):
@@ -96,7 +171,7 @@ class AnalysisConfig:
         duration : int
             Duration of leading background window in ms
         """
-        return self._dur_leading_bg
+        return self._duration_bgl_ms
 
     @property
     def dur_trailing_bg(self):
@@ -107,7 +182,7 @@ class AnalysisConfig:
         duration : int
             Duration of trailing background window in ms
         """
-        return self._dur_trailing_bg
+        return self._duration_bgt_ms
 
     @property
     def dur_leading_excl(self):
@@ -118,7 +193,7 @@ class AnalysisConfig:
         duration : int
             Duration of leading exclusion window in ms
         """
-        return self._dur_leading_excl
+        return self._duration_exl_ms
 
     @property
     def dur_trailing_excl(self):
@@ -129,10 +204,26 @@ class AnalysisConfig:
         duration : int
             Duration of trailing exclusion window in ms
         """
-        return self._dur_trailing_excl
+        return self._duration_ext_ms
+
+    @property
+    def dur_trigger_window(self):
+        """trigger window duration in ms
+        """
+        return self._dur_trigger_window
+
+    @property
+    def dur_signi_buffer(self):
+        """xi buffer duration in ms
+        """
+        return self._dur_signi_buffer
+
+    @property
+    def trigger_level(self):
+        return self._trigger_level
 
 
-class AnalysisHandler(AnalysisConfig):
+class AnalysisHandler():
     """Container for Analysis objects and functions for use in SNDAQ's SICO search algorithm.
 
     Methods
@@ -157,14 +248,15 @@ class AnalysisHandler(AnalysisConfig):
         Update SICO analysis sums
 
     """
-    def __init__(self, binnings=(500, 1.5e3, 4e3, 10e3), ndom=5160, eps=None, dtype=np.uint16,
+
+    def __init__(self, config, ndom=5160, eps=None, dtype=np.uint16,
                  starttime=0, dropped_doms=None):
         """Create Analysis Handler
 
         Parameters
         ----------
-        binnings : array_like
-            Bin sizes to be used during SICO analysis
+        config : AnalysisConfig
+            Instance of Analysis configuration object
         ndom : int
             number of contributing DOMs
         eps : numpy.ndarray
@@ -172,13 +264,13 @@ class AnalysisHandler(AnalysisConfig):
         dtype
             Data type for SN scaler arrays
         """
-        super().__init__()
+        self.config = config
 
         # Create shared window buffer
-        self._binnings = binnings
+        self._binnings = config.binsize_ms
         self._ndom = ndom
         if eps is None:
-            self._eps = np.where(np.arange(5160) > 4800, np.ones(5160), 1.35*np.ones(5160))
+            self._eps = np.where(np.arange(5160) > 4800, np.ones(5160), 1.35 * np.ones(5160))
         else:
             self._eps = eps
         self._dtype = dtype
@@ -193,18 +285,19 @@ class AnalysisHandler(AnalysisConfig):
         #   Leading/trailing background and exclusion windows, and search window (duration_nosearch + max(binnings))
         #   Max analysis offset (max(binnings) - base_binsize)
         #   Rates to subtract from buffer during analysis (max(binnings))
-        self._size = ((self.duration_nosearch + 3*int(max(binnings))) // self.base_binsize) - 1
+        self._size = ((config.duration_nosearch + 3 * int(max(self._binnings))) // config.base_binsize) - 1
+        self._rebin_factor = int(config.base_binsize / config.raw_binsize)
+        self.buffer_raw = windowbuffer(size=self._size * self._rebin_factor, ndom=ndom, dtype=dtype)
         self.buffer_analysis = windowbuffer(size=self._size, ndom=self._ndom, dtype=np.uint64)
-        self._rebin_factor = int(self.base_binsize/self.raw_binsize)
-        self.buffer_raw = windowbuffer(size=self._size*self._rebin_factor, ndom=ndom, dtype=dtype)
+        self.buffer_xi = windowbuffer(size=config.dur_signi_buffer, ndom=len(self._binnings), dtype=np.float64)
 
         # Create analyses
         self.analyses = []
-        for binning in np.asarray(binnings, dtype=dtype):
+        for binning in np.asarray(self._binnings, dtype=dtype):
             for offset in np.arange(0, binning, 500, dtype=dtype):
-                idx = int(self._size - (self.duration_nosearch + offset + binning)/self.base_binsize)
+                idx = int(self._size - (config.duration_nosearch + offset + binning) / config.base_binsize)
                 self.analyses.append(
-                    Analysis(binning, offset, idx=idx, ndom=self._ndom)
+                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom)
                 )
 
         # Define counter for accumulation used in rebinning from raw to base analysis
@@ -214,7 +307,7 @@ class AnalysisHandler(AnalysisConfig):
         self.current_trigger = Trigger()
         self.trigger_xi = 0.
         self.triggered_analysis = None
-        self._n_bins_trigger_window = int(self._dur_trigger_window/self.base_binsize)
+        self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
         self._n_trigger_close = 0
 
     @property
@@ -245,7 +338,7 @@ class AnalysisHandler(AnalysisConfig):
     def current_time(self):
         """Timestamp of data entering the analysis buffer
         """
-        return self._starttime + self.buffer_analysis.n * self._base_binsize / 1e3
+        return self._starttime + self.buffer_analysis.n * self.config.base_binsize / 1e3
 
     @property
     def eps(self):
@@ -266,7 +359,7 @@ class AnalysisHandler(AnalysisConfig):
         """Print binsize and relative offset of all analysis objects
         """
         for i, analysis in enumerate(self.analyses):
-            print(f'{i:d} {analysis.binsize*1e-3:4.1f} (+{analysis.offset*1e-3:4.1f})')
+            print(f'{i:d} {analysis.binsize * 1e-3:4.1f} (+{analysis.offset * 1e-3:4.1f})')
 
     def update_analyses(self):
         """Update SICO sums and computed quantities for all analyses
@@ -309,8 +402,8 @@ class AnalysisHandler(AnalysisConfig):
             analysis.hit_sum += add_to_bgl + add_to_bgt
             analysis.hit_sum -= (sub_from_bgl + sub_from_bgt)
 
-            analysis.hit_sum2 += (add_to_bgl**2 + add_to_bgt**2)
-            analysis.hit_sum2 -= (sub_from_bgl**2 + sub_from_bgt**2)
+            analysis.hit_sum2 += (add_to_bgl ** 2 + add_to_bgt ** 2)
+            analysis.hit_sum2 -= (sub_from_bgl ** 2 + sub_from_bgt ** 2)
 
     def update_results(self, analysis):
         """Update SICO analysis results
@@ -328,7 +421,7 @@ class AnalysisHandler(AnalysisConfig):
         signal = rate - mean
 
         sum_rate_dev = np.sum(signal * self.eps / var)
-        sum_inv_var = np.sum(self.eps**2 / var)
+        sum_inv_var = np.sum(self.eps ** 2 / var)
         analysis.dmu = sum_rate_dev / sum_inv_var
         analysis.var_dmu = 1. / sum_inv_var
 
@@ -337,7 +430,7 @@ class AnalysisHandler(AnalysisConfig):
 
         # calc chi2
         # tmp = (signal*(1. - eps))**2 / (var + eps*abs(signal))
-        analysis.chi2 = np.sum((rate - (mean+self.eps*signal))**2 / (var + self.eps*abs(signal)))
+        analysis.chi2 = np.sum((rate - (mean + self.eps * signal)) ** 2 / (var + self.eps * abs(signal)))
 
     def accumulate(self, val, idx):
         """Accumulate 2 ms data into analysis binsize
@@ -415,8 +508,7 @@ class AnalysisHandler(AnalysisConfig):
         # are updated.
 
         # Check uncorr. xi against lowest threshold (uncorr. or corr.) to initiate trigger processing
-        if xi_max >= self._trigger_level.threshold and xi_max > self.current_trigger.xi:
-
+        if xi_max >= self.config.trigger_level.threshold and xi_max > self.current_trigger.xi:
             # Extend trigger window after new highest trigger
             self.open_trigger_window()
             idx = xi.argmax()
@@ -425,6 +517,51 @@ class AnalysisHandler(AnalysisConfig):
 
             # Corrected signi is set upon trigger becoming finalized
             self.current_trigger = Trigger(xi=ana.xi, xi_corr=0, t=t, binsize=ana.binsize, offset=ana.offset)
+
+    def get_buffered_xi(self, binsize):
+        """Return buffered xi in requested binsize
+
+        Parameters
+        ----------
+        binsize : int
+            Analysis binsize in units ms. Must match one of the binnings provided at initialization
+
+        Returns
+        -------
+        data : np.ndarray of float
+            Buffered xi in the requested binsize
+        """
+
+        idx_bin = self._binnings.argsort(binsize)[0][0]
+
+        # Guard against 0-padding at start of run
+        if self.buffer_xi.n < (self.config.dur_signi_buffer // self.config.base_binsize):
+            # Do not return non-populated entries in buffer
+            return self.buffer_xi.data[-self.buffer_xi.n:, idx_bin]
+        # TODO: Add check for end of run
+        return self.buffer_xi.data[:, idx_bin]
+
+    def get_buffered_rmu(self, binsize):
+        """Return buffered muon rates in requested binsize
+
+        Parameters
+        ----------
+        binsize : int
+            Analysis binsize in units ms. Must match one of the binnings provided at initialization
+
+        Returns
+        -------
+        data : np.ndarray of float
+            muon rates in the requested binsize
+        """
+        return None
+
+    def prepare_candidate(self, rmu, rmu_500):
+        """Prepares SN candidate for muon correction and further processing
+        """
+        self.current_trigger.buffer_xi = self.get_buffered_xi(self.current_trigger.binsize)
+        self.current_trigger.buffer_rmu = {'trigger_binsize': rmu,
+                                           '500ms': rmu_500}
 
     @property
     def trigger_finalized(self):
@@ -436,15 +573,18 @@ class AnalysisHandler(AnalysisConfig):
         return self.current_trigger.xi > 0 and not self.trigger_pending
 
 
-class Analysis(AnalysisConfig):
+class Analysis:
     """Descriptor object to handle data access and algorithms for SNDAQ sico-analysis
 
     """
-    def __init__(self, binsize, offset, idx=0, ndom=5160):
+
+    def __init__(self, config, binsize, offset, idx=0, ndom=5160):
         """Create Analysis object
 
         Parameters
         ----------
+        config : AnalysisConfig
+            Instance of Analysis configuration object
         binsize : int
             Time size of bins in signal rate and background rate calculation
         offset : int
@@ -454,36 +594,36 @@ class Analysis(AnalysisConfig):
         ndom : int
             Number of DOMs contributing to the analysis
         """
-        super().__init__()
-        if (binsize % self.base_binsize) > 0:  # Binsize must be an integer multiple of base_binsize
-            raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {self.base_binsize:d} ms')
+        if (binsize % config.base_binsize) > 0:  # Binsize must be an integer multiple of base_binsize
+            raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {config.base_binsize:d} ms')
         self._binsize = binsize  # ms
+        self._base_binsize = config.base_binsize  # ms
         self._offset = offset  # ms
-        self._rebin_factor = int(self._binsize / self.base_binsize)
+        self._rebin_factor = int(self._binsize / config.base_binsize)
         # TODO: Decide if ndom should always be 5160 or the number of doms in the current config
         self._ndom = ndom
 
-        self._nbin_nosearch = self.duration_nosearch / self._binsize
-        self._nbin_background = (self._dur_leading_bg + self._dur_trailing_bg) / self._binsize
+        self._nbin_nosearch = config.duration_nosearch / self._binsize
+        self._nbin_background = (config.dur_leading_bg + config.dur_trailing_bg) / self._binsize
 
         # Indices for accessing data buffer, all point to first column in respective region
         # TODO: Check alignment so all start filling as soon as possible
         self._idx_bgt = idx  # Trailing background
-        self._idx_ext = self._idx_bgt + int(self.dur_trailing_bg/self.base_binsize)  # Trailing exclusion
-        self._idx_sw = self._idx_ext + int(self.dur_trailing_excl/self.base_binsize)  # Search window
-        self._idx_exl = self._idx_sw + int(self._binsize/self.base_binsize)  # Leading exclusion
-        self._idx_bgl = self._idx_exl + int(self.dur_leading_excl/self.base_binsize)  # Leading background
-        self.idx_eod = self._idx_bgl + int(self.dur_leading_bg/self.base_binsize)  # End of data in analysis
+        self._idx_ext = self._idx_bgt + int(config.dur_trailing_bg / self._base_binsize)  # Trailing exclusion
+        self._idx_sw = self._idx_ext + int(config.dur_trailing_excl / self._base_binsize)  # Search window
+        self._idx_exl = self._idx_sw + int(self.binsize / self._base_binsize)  # Leading exclusion
+        self._idx_bgl = self._idx_exl + int(config.dur_leading_excl / self._base_binsize)  # Leading background
+        self.idx_eod = self._idx_bgl + int(config.dur_leading_bg / self._base_binsize)  # End of data in analysis
 
-        # Indices of buffer for "bins" to add to sums for analysis
+        # Indices of Analysis buffer for "bins" to add to sums for analysis
         # Using np.arange here (np arrays as indices) allows all analyses to be indexed in the same way
         # It's important to compute this only once, as these indices will never change for a given analysis
-        self._idx_addbgl = np.arange(self.idx_eod-self.rebin_factor, self.idx_eod)  # Add to bgl
-        self._idx_subbgl = np.arange(self.idx_bgl-self.rebin_factor, self.idx_bgl)  #
-        self._idx_addbgt = np.arange(self.idx_ext-self.rebin_factor, self.idx_ext)
-        self._idx_subbgt = np.arange(self.idx_bgt-self.rebin_factor, self.idx_bgt)
-        self._idx_addsw = np.arange(self.idx_exl-self.rebin_factor, self.idx_exl)
-        self._idx_subsw = np.arange(self.idx_sw-self.rebin_factor, self.idx_sw)
+        self._idx_addbgl = np.arange(self.idx_eod - self.rebin_factor, self.idx_eod)  # Add to leading bg
+        self._idx_subbgl = np.arange(self.idx_bgl - self.rebin_factor, self.idx_bgl)  # Subtract from leading bg
+        self._idx_addbgt = np.arange(self.idx_ext - self.rebin_factor, self.idx_ext)  # Add to trailing bg
+        self._idx_subbgt = np.arange(self.idx_bgt - self.rebin_factor, self.idx_bgt)  # Subtract from trailing bg
+        self._idx_addsw = np.arange(self.idx_exl - self.rebin_factor, self.idx_exl)  # Add to search window
+        self._idx_subsw = np.arange(self.idx_sw - self.rebin_factor, self.idx_sw)  # Subtract from search window
 
         # Quantities used to construct trigger
         self.hit_sum = np.zeros(self._ndom, dtype=np.uint64)
@@ -499,8 +639,13 @@ class Analysis(AnalysisConfig):
 
         # Quantities used to evaluate when analysis is ready to start forming sums and issuing triggers
         # Analysis becomes triggerable when trailing background has filled
-        self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / self.base_binsize)
+        self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / config.base_binsize)
         self.n = 0
+
+    def __repr__(self):
+        repr_str = f"SNDAQ Binned Search #{int((self.binsize + self.offset)/self._base_binsize):<2d}: " +\
+            f"{self.binsize} +({self.offset}) s"
+        return repr_str
 
     def reset_accum(self):
         """Reset Analysis accumulator sums after collecting 500 ms of data
@@ -599,7 +744,7 @@ class Analysis(AnalysisConfig):
             Variance of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
-        return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum**2)) / self.nbin_bg**2
+        return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum ** 2)) / self.nbin_bg ** 2
 
     @property
     def std(self):
@@ -655,7 +800,7 @@ class Analysis(AnalysisConfig):
         duration : int
             Duration of analysis window in ms, comprised of background, exclusion, and search window
         """
-        return self.duration_nosearch + self._binsize
+        return (self._nbin_nosearch + 1) * self.binsize
 
     @property
     def idx_bgl(self):
