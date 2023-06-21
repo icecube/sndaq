@@ -402,8 +402,8 @@ class AnalysisHandler():
             analysis.hit_sum += add_to_bgl + add_to_bgt
             analysis.hit_sum -= (sub_from_bgl + sub_from_bgt)
 
-            analysis.hit_sum2 += (add_to_bgl**2 + add_to_bgt**2)
-            analysis.hit_sum2 -= (sub_from_bgl**2 + sub_from_bgt**2)
+            analysis.hit_sum2 += (add_to_bgl ** 2 + add_to_bgt ** 2)
+            analysis.hit_sum2 -= (sub_from_bgl ** 2 + sub_from_bgt ** 2)
 
     def update_results(self, analysis):
         """Update SICO analysis results
@@ -421,7 +421,7 @@ class AnalysisHandler():
         signal = rate - mean
 
         sum_rate_dev = np.sum(signal * self.eps / var)
-        sum_inv_var = np.sum(self.eps**2 / var)
+        sum_inv_var = np.sum(self.eps ** 2 / var)
         analysis.dmu = sum_rate_dev / sum_inv_var
         analysis.var_dmu = 1. / sum_inv_var
 
@@ -430,7 +430,7 @@ class AnalysisHandler():
 
         # calc chi2
         # tmp = (signal*(1. - eps))**2 / (var + eps*abs(signal))
-        analysis.chi2 = np.sum((rate - (mean+self.eps*signal))**2 / (var + self.eps*abs(signal)))
+        analysis.chi2 = np.sum((rate - (mean + self.eps * signal)) ** 2 / (var + self.eps * abs(signal)))
 
     def accumulate(self, val, idx):
         """Accumulate 2 ms data into analysis binsize
