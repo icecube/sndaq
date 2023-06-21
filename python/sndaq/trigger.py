@@ -47,8 +47,8 @@ class BasicTrigger(_TriggerLevel):
     """Basic Trigger
     """
     name = 'basic'
-    threshold = 4.0
-    threshold_corr = 6.0
+    threshold = 6.0
+    threshold_corr = 4.0
 
     @classmethod
     def process(cls, trigger):
