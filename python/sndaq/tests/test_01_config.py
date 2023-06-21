@@ -2,7 +2,9 @@
 import os
 import sndaq
 from sndaq.analysis import AnalysisConfig
+
 import unittest
+import numpy.testing as npt
 
 
 class TestConfig(unittest.TestCase):
@@ -16,7 +18,8 @@ class TestConfig(unittest.TestCase):
         self.assertTrue(config.use_offsets)
         self.assertTrue(config.use_rebins)
 
-        self.assertEqual(config.binsize_ms, [500, 1500, 4000, 10000])
+        npt.assert_array_equal(config.binsize_ms, [500, 1500, 4000, 10000])
+
         self.assertEqual(config.duration_bgl_ms, 300000)
         self.assertEqual(config.duration_bgt_ms, 300000)
         self.assertEqual(config.duration_exl_ms, 15000)
