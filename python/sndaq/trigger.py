@@ -28,19 +28,32 @@ class _TriggerLevel(ABC):
                self.threshold_corr == other.threshold_corr
 
 
+class PrimaryTrigger(_TriggerLevel):
+    """Primary Trigger
+    """
+    name = 'primary'
+    threshold = 4.0
+    threshold_corr = 4.0
+
+    @classmethod
+    def process(cls, trigger):
+        print('Primary Trigger Processing...')
+        print(trigger)
+
+
 # Experimenting with escalating trigger scheme. The idea is you would init the highest matching trigger class, and the
 #    processing would propagate down to lower level triggers, executing from high -> low threshold
 class BasicTrigger(_TriggerLevel):
     """Basic Trigger
     """
     name = 'basic'
-    threshold = 4.0
-    threshold_corr = 6.0
+    threshold = 6.0
+    threshold_corr = 4.0
 
     @classmethod
     def process(cls, trigger):
         print('Basic Trigger Processing...')
-        print(trigger)
+        PrimaryTrigger.process(trigger)
 
 
 class SNWGTrigger(_TriggerLevel):
@@ -170,11 +183,11 @@ class Trigger:
             SNDAQ (uncorrected) TS
         xi_corr : float
             SNDAQ muon-corrected TS
-        t : float
+        t : np.datetime64
             Time of trigger (Time of bin at trailing edge of AnalysisHandler.buffer_analysis search window)
-        binsize : float
+        binsize : int
             Size of analysis search window in ms from which the trigger was issued
-        offset : float
+        offset : int
             Offset of search window in ms from which the trigger was issued
         """
         self.xi = xi
@@ -207,4 +220,24 @@ class Trigger:
     #
     #     """
     #     return cls.__init__(ana.xi, 0, ana.time, ana.binsize,  )
+
+
+class Candidate:
+    """SN Event Candidate
+    """
+    def __init__(self, trigger):
+        """
+
+        Parameters
+        ----------
+        trigger : sndaq.trigger.Trigger
+        """
+        self.trigger = trigger
+        self.xi = None
+        self.xi_500 = None
+        self.rmu_trigger = None
+        self.rmu_base = None
+        self.rmu_files = None
+
+
 
