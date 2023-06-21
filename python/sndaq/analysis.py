@@ -36,11 +36,6 @@ class AnalysisConfig:
     # IMPORTANT NOTE: Leading/trailing refers to time, buffer indices will be inversely prop to time
     # TODO: Documentation (Figure) or fix to Buffer indexing needed
     _raw_binsize = 2  # ms
-    _base_binsize = 500  # ms
-    _duration_bgl_ms = int(300e3)  # ms (5 min)
-    _duration_bgt_ms = int(300e3)  # ms (5 min)
-    _duration_exl_ms = int(30e3)  # ms (30 s)
-    _duration_ext_ms = int(30e3)  # ms (30 s)
     _dur_signi_buffer = int(600e3)  # ms (10 min)
     _dur_trigger_window = int(30e3)
     _trigger_level = PrimaryTrigger
@@ -58,7 +53,7 @@ class AnalysisConfig:
             Switch to use multiple analyses offset by the smallest binsize
         use_rebins : bool
             Switch to perform analysis on rebinned buffer or base buffer
-        binsize_ms : int or list of int
+        binsize_ms : list of int
             Duration(s) of search window(s) in ms at which to perform the analysis
         duration_bgl_ms : int
             Duration of leading background window in ms
@@ -83,17 +78,20 @@ class AnalysisConfig:
         """
         self.use_offsets = use_offsets
         self.use_rebins = use_rebins
-        self.binsize_ms = binsize_ms
-        self.duration_bgl_ms = duration_bgl_ms
-        self.duration_bgt_ms = duration_bgt_ms
-        self.duration_exl_ms = duration_exl_ms
-        self.duration_ext_ms = duration_ext_ms
+        self._binsize_ms = np.array(binsize_ms)
+        self._duration_bgl_ms = duration_bgl_ms
+        self._duration_bgt_ms = duration_bgt_ms
+        self._duration_exl_ms = duration_exl_ms
+        self._duration_ext_ms = duration_ext_ms
         self.min_active_doms = min_active_doms
         self.min_bkg_rate = min_bkg_rate
         self.max_bkg_rate = max_bkg_rate
         self.min_bkg_fano = min_bkg_fano
         self.max_bkg_fano = max_bkg_fano
         self.max_bkg_abs_skew = max_bkg_abs_skew
+
+        self._base_binsize = np.min(self.binsize_ms)
+        self.max_binsize = np.max(self.binsize_ms)  # TODO: Change into property
 
     def __repr__(self):
         kwargs = vars(self)
@@ -118,6 +116,7 @@ class AnalysisConfig:
             conf = ConfigParser()
             conf.read(conf_path)
 
+        # TODO Add to base class, have handlers inherit and add class member to handlers for the config key
         conf_dict = {key: ast.literal_eval(val) for key, val in conf['binned_search'].items()}
         try:
             return cls(**conf_dict)
@@ -138,7 +137,7 @@ class AnalysisConfig:
         duration : int
             Duration of analysis window including background and exclusion blocks in ms
         """
-        return self.duration_bgl_ms + self.duration_ext_ms + self.duration_bgt_ms + self.duration_ext_ms
+        return self.duration_bgl_ms + self.duration_ext_ms + self.duration_bgt_ms + self.duration_exl_ms
 
     @property
     def raw_binsize(self):
@@ -152,6 +151,17 @@ class AnalysisConfig:
         return self._raw_binsize
 
     @property
+    def binsize_ms(self):
+        """Base analysis binsize in ms
+
+        Returns
+        -------
+        binsize: np.ndarray of int
+            Size of base analysis time bins in ms
+        """
+        return self._binsize_ms
+
+    @property
     def base_binsize(self):
         """Base analysis binsize in ms
 
@@ -163,7 +173,7 @@ class AnalysisConfig:
         return self._base_binsize
 
     @property
-    def dur_leading_bg(self):
+    def duration_bgl_ms(self):
         """Leading background duration in ms
 
         Returns
@@ -174,7 +184,7 @@ class AnalysisConfig:
         return self._duration_bgl_ms
 
     @property
-    def dur_trailing_bg(self):
+    def duration_bgt_ms(self):
         """Trailing background duration in ms
 
         Returns
@@ -185,7 +195,7 @@ class AnalysisConfig:
         return self._duration_bgt_ms
 
     @property
-    def dur_leading_excl(self):
+    def duration_exl_ms(self):
         """Leading exclusion duration in ms
 
         Returns
@@ -196,8 +206,8 @@ class AnalysisConfig:
         return self._duration_exl_ms
 
     @property
-    def dur_trailing_excl(self):
-        """Leading exclusion duration in ms
+    def duration_ext_ms(self):
+        """Trailing exclusion duration in ms
 
         Returns
         -------
@@ -220,10 +230,12 @@ class AnalysisConfig:
 
     @property
     def trigger_level(self):
+        """Primary Trigger level, the threshold at which a trigger escalates into a candidate
+        """
         return self._trigger_level
 
 
-class AnalysisHandler():
+class AnalysisHandler:
     """Container for Analysis objects and functions for use in SNDAQ's SICO search algorithm.
 
     Methods
@@ -285,11 +297,11 @@ class AnalysisHandler():
         #   Leading/trailing background and exclusion windows, and search window (duration_nosearch + max(binnings))
         #   Max analysis offset (max(binnings) - base_binsize)
         #   Rates to subtract from buffer during analysis (max(binnings))
-        self._size = ((config.duration_nosearch + 3 * int(max(self._binnings))) // config.base_binsize) - 1
+        self._size = ((config.duration_nosearch + 3 * self.config.max_binsize) // config.base_binsize) - 1
         self._rebin_factor = int(config.base_binsize / config.raw_binsize)
         self.buffer_raw = windowbuffer(size=self._size * self._rebin_factor, ndom=ndom, dtype=dtype)
         self.buffer_analysis = windowbuffer(size=self._size, ndom=self._ndom, dtype=np.uint64)
-        self.buffer_xi = windowbuffer(size=config.dur_signi_buffer, ndom=len(self._binnings), dtype=np.float64)
+        self.buffer_xi = windowbuffer(size=config.dur_signi_buffer, ndom=len(self.config.binsize_ms), dtype=np.float64)
 
         # Create analyses
         self.analyses = []
@@ -532,7 +544,7 @@ class AnalysisHandler():
             Buffered xi in the requested binsize
         """
 
-        idx_bin = self._binnings.argsort(binsize)[0][0]
+        idx_bin = self.config.binsize_ms.argsort(binsize)[0][0]
 
         # Guard against 0-padding at start of run
         if self.buffer_xi.n < (self.config.dur_signi_buffer // self.config.base_binsize):
@@ -554,7 +566,7 @@ class AnalysisHandler():
         data : np.ndarray of float
             muon rates in the requested binsize
         """
-        return None
+        return NotImplemented
 
     def prepare_candidate(self, rmu, rmu_500):
         """Prepares SN candidate for muon correction and further processing
@@ -604,16 +616,16 @@ class Analysis:
         self._ndom = ndom
 
         self._nbin_nosearch = config.duration_nosearch / self._binsize
-        self._nbin_background = (config.dur_leading_bg + config.dur_trailing_bg) / self._binsize
+        self._nbin_background = (config.duration_bgl_ms + config.duration_bgt_ms) / self._binsize
 
         # Indices for accessing data buffer, all point to first column in respective region
         # TODO: Check alignment so all start filling as soon as possible
         self._idx_bgt = idx  # Trailing background
-        self._idx_ext = self._idx_bgt + int(config.dur_trailing_bg / self._base_binsize)  # Trailing exclusion
-        self._idx_sw = self._idx_ext + int(config.dur_trailing_excl / self._base_binsize)  # Search window
+        self._idx_ext = self._idx_bgt + int(config.duration_bgt_ms / self._base_binsize)  # Trailing exclusion
+        self._idx_sw = self._idx_ext + int(config.duration_ext_ms / self._base_binsize)  # Search window
         self._idx_exl = self._idx_sw + int(self.binsize / self._base_binsize)  # Leading exclusion
-        self._idx_bgl = self._idx_exl + int(config.dur_leading_excl / self._base_binsize)  # Leading background
-        self.idx_eod = self._idx_bgl + int(config.dur_leading_bg / self._base_binsize)  # End of data in analysis
+        self._idx_bgl = self._idx_exl + int(config.duration_exl_ms / self._base_binsize)  # Leading background
+        self.idx_eod = self._idx_bgl + int(config.duration_bgl_ms / self._base_binsize)  # End of data in analysis
 
         # Indices of Analysis buffer for "bins" to add to sums for analysis
         # Using np.arange here (np arrays as indices) allows all analyses to be indexed in the same way
