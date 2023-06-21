@@ -212,8 +212,18 @@ class AnalysisConfig:
         """
         return self._dur_trigger_window
 
+    @property
+    def dur_signi_buffer(self):
+        """xi buffer duration in ms
+        """
+        return self._dur_signi_buffer
 
-class AnalysisHandler(AnalysisConfig):
+    @property
+    def trigger_level(self):
+        return self._trigger_level
+
+
+class AnalysisHandler():
     """Container for Analysis objects and functions for use in SNDAQ's SICO search algorithm.
 
     Methods
@@ -507,6 +517,51 @@ class AnalysisHandler(AnalysisConfig):
 
             # Corrected signi is set upon trigger becoming finalized
             self.current_trigger = Trigger(xi=ana.xi, xi_corr=0, t=t, binsize=ana.binsize, offset=ana.offset)
+
+    def get_buffered_xi(self, binsize):
+        """Return buffered xi in requested binsize
+
+        Parameters
+        ----------
+        binsize : int
+            Analysis binsize in units ms. Must match one of the binnings provided at initialization
+
+        Returns
+        -------
+        data : np.ndarray of float
+            Buffered xi in the requested binsize
+        """
+
+        idx_bin = self._binnings.argsort(binsize)[0][0]
+
+        # Guard against 0-padding at start of run
+        if self.buffer_xi.n < (self.config.dur_signi_buffer // self.config.base_binsize):
+            # Do not return non-populated entries in buffer
+            return self.buffer_xi.data[-self.buffer_xi.n:, idx_bin]
+        # TODO: Add check for end of run
+        return self.buffer_xi.data[:, idx_bin]
+
+    def get_buffered_rmu(self, binsize):
+        """Return buffered muon rates in requested binsize
+
+        Parameters
+        ----------
+        binsize : int
+            Analysis binsize in units ms. Must match one of the binnings provided at initialization
+
+        Returns
+        -------
+        data : np.ndarray of float
+            muon rates in the requested binsize
+        """
+        return None
+
+    def prepare_candidate(self, rmu, rmu_500):
+        """Prepares SN candidate for muon correction and further processing
+        """
+        self.current_trigger.buffer_xi = self.get_buffered_xi(self.current_trigger.binsize)
+        self.current_trigger.buffer_rmu = {'trigger_binsize': rmu,
+                                           '500ms': rmu_500}
 
     @property
     def trigger_finalized(self):
