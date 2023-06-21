@@ -8,7 +8,6 @@ from __future__ import absolute_import, division, print_function
 from glob import glob
 import os
 import re
-import sys
 #
 from distutils.command.sdist import sdist as DistutilsSdist
 from setuptools import setup, find_packages
@@ -24,8 +23,9 @@ setup_keywords['description'] = 'IceCube supernova simulation package'
 setup_keywords['author'] = 'IceCube Collaboration'
 setup_keywords['author_email'] = 'sn-wg@icecube.wisc.edu'
 setup_keywords['license'] = 'BSD'
-setup_keywords['url'] = 'https://github.com/WIPACrepo/pysndaq'
+setup_keywords['url'] = 'https://github.com/icecube/pysndaq'
 setup_keywords['version'] = get_version()
+setup_keywords['entry_points'] = {'console_scripts': ['sndaq = sndaq.cli:main']}
 #
 # Use README.md as a long_description.
 #
@@ -43,19 +43,37 @@ if os.path.isdir('bin'):
 setup_keywords['provides'] = [setup_keywords['name']]
 setup_keywords['requires'] = ['Python (>2.7.0)']
 setup_keywords['zip_safe'] = False
-setup_keywords['use_2to3'] = False
+# setup_keywords['use_2to3'] = False
 setup_keywords['packages'] = find_packages('python')
 setup_keywords['package_dir'] = {'': 'python'}
 setup_keywords['cmdclass'] = {'version': SetVersion, 'sdist': DistutilsSdist}
-setup_keywords['test_suite']='nose2.collector.collector'
-setup_keywords['tests_require']=['nose2', 'nose2[coverage_plugin]>=0.6.5']
+
 
 requires = []
+optionals = {}
 with open('requirements.txt', 'r') as f:
-    for line in f:
-        if line.strip():
-            requires.append(line.strip())
+    for line in f.readlines():
+        package = line.strip()
+        if not package:
+            continue
+        # Check for extra requirement specifications
+        extra_spec = re.search('\[(.*?)]', package)
+        if not extra_spec:
+            requires.append(package)
+        else:
+            extra_spec = extra_spec.group()
+            # Removes '[]' characters, obtains all spec. keys and removes spaces in spec. keys
+            spec_keys = [s.strip(' ') for s in re.sub('\[|]', '', extra_spec).split(',')]
+            package = package.replace(extra_spec, '')
+            for spec_key in spec_keys:
+                if spec_key not in optionals:
+                    optionals.update({spec_key: [package]})
+                else:
+                    optionals[spec_key].append(package)
+
 setup_keywords['install_requires'] = requires
+setup_keywords['extras_require'] = optionals
+
 #
 # Internal data directories.
 #
