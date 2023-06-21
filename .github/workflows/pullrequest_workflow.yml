@@ -14,11 +14,11 @@ jobs:
   build:
     name: Build PySNDAQ and run unit tests
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       # Add a list of python versions we want to use for testing.
       matrix:
-        python-version: [3.6]
+        python-version: [3.6.8]
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -46,11 +46,11 @@ jobs:
         run: |
           pytest --cov-report xml:python/sndaq/tests/coverage.xml --cov=sndaq python/sndaq/tests/
 
-      - name: Publish coverage report
-        uses: codecov/codecov-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }} # required for private repos
-          files: python/sndaq/tests/coverage.xml
-          name: PySNDAQ
-          fail_ci_if_error: true # optional (default = false)
-          verbose: true # optional (default = false)
+#       - name: Publish coverage report
+#         uses: codecov/codecov-action@v1
+#         with:
+#           token: ${{ secrets.CODECOV_TOKEN }} # required for private repos
+#           files: python/sndaq/tests/coverage.xml
+#           name: PySNDAQ
+#           fail_ci_if_error: true # optional (default = false)
+#           verbose: true # optional (default = false)
