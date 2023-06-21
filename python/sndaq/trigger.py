@@ -221,3 +221,23 @@ class Trigger:
     #     """
     #     return cls.__init__(ana.xi, 0, ana.time, ana.binsize,  )
 
+
+class Candidate:
+    """SN Event Candidate
+    """
+    def __init__(self, trigger):
+        """
+
+        Parameters
+        ----------
+        trigger : sndaq.trigger.Trigger
+        """
+        self.trigger = trigger
+        self.xi = None
+        self.xi_500 = None
+        self.rmu_trigger = None
+        self.rmu_base = None
+        self.rmu_files = None
+
+
+
