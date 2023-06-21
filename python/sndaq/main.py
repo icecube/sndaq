@@ -10,11 +10,11 @@ from sndaq.detector import Detector
 if __name__ == "__main__":
 
     # Setup core components
-    ana_conf_path = "../../scratch/analysis.config"
+    ana_conf_path = "../data/config/analysis.config"
     ana_config = AnalysisConfig.from_config(conf_path=ana_conf_path)
     ana = AnalysisHandler(ana_config)
 
-    fh_conf_path = "../../scratch/default.config"
+    fh_conf_path = "../data/config/default.config"
     fh_config = AnalysisConfig.from_config(conf_path=fh_conf_path)
     fh = FileHandler(fh_config)
 
