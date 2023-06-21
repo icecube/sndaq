@@ -183,11 +183,11 @@ class Trigger:
             SNDAQ (uncorrected) TS
         xi_corr : float
             SNDAQ muon-corrected TS
-        t : float
+        t : np.datetime64
             Time of trigger (Time of bin at trailing edge of AnalysisHandler.buffer_analysis search window)
-        binsize : float
+        binsize : int
             Size of analysis search window in ms from which the trigger was issued
-        offset : float
+        offset : int
             Offset of search window in ms from which the trigger was issued
         """
         self.xi = xi
