@@ -1,5 +1,7 @@
 # SNDAQ - IceCube Supernova DAQ
 
+![tests](https://github.com/icecube/pysndaq/actions/workflows/tests.yml/badge.svg)
+
 A Python port of SNDAQ.
 
 ## Installation
