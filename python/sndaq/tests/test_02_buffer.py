@@ -13,6 +13,8 @@ class testSndaqBuffer(unittest.TestCase):
 class TestWindowBuffer(unittest.TestCase):
 
     def test_init(self):
+        """Data buffer initialization
+        """
         buffer = windowbuffer(1)
         self.assertEqual(buffer._ndom, 5160)
         self.assertEqual(buffer._mult, 2)
@@ -21,6 +23,8 @@ class TestWindowBuffer(unittest.TestCase):
         self.assertFalse(np.any(buffer.data))
 
     def test_size(self):
+        """Buffer size allocation
+        """
         size = 20
         ndom = 40
         buffer = windowbuffer(size=size, ndom=ndom)
@@ -28,10 +32,14 @@ class TestWindowBuffer(unittest.TestCase):
         self.assertEqual(buffer.data.size, size*ndom)
 
     def test_get(self):
+        """Buffer access
+        """
         # All zeros are expected
         self.assertFalse(np.any(windowbuffer(20)[0]), "Found non-zero value")
 
     def test_append(self):
+        """Append to buffer
+        """
         size = 20
         ndom = 40
         buffer = windowbuffer(size=size, ndom=ndom)
@@ -40,6 +48,8 @@ class TestWindowBuffer(unittest.TestCase):
         self.assertTrue(np.all(buffer[-1] == values))
 
     def test_reset(self):
+        """Buffer reset
+        """
         size = 4
         ndom = 10
         n = 1
