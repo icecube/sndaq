@@ -28,6 +28,19 @@ class _TriggerLevel(ABC):
                self.threshold_corr == other.threshold_corr
 
 
+class PrimaryTrigger(_TriggerLevel):
+    """Primary Trigger
+    """
+    name = 'primary'
+    threshold = 4.0
+    threshold_corr = 4.0
+
+    @classmethod
+    def process(cls, trigger):
+        print('Primary Trigger Processing...')
+        print(trigger)
+
+
 # Experimenting with escalating trigger scheme. The idea is you would init the highest matching trigger class, and the
 #    processing would propagate down to lower level triggers, executing from high -> low threshold
 class BasicTrigger(_TriggerLevel):
@@ -40,7 +53,7 @@ class BasicTrigger(_TriggerLevel):
     @classmethod
     def process(cls, trigger):
         print('Basic Trigger Processing...')
-        print(trigger)
+        PrimaryTrigger.process(trigger)
 
 
 class SNWGTrigger(_TriggerLevel):
