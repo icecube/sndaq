@@ -160,6 +160,10 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
         List of candidate descriptions from SNDAQ logfile
     """
     run_info = get_run_info(run_no, USER_live, PASS_live)
+    if run_info['status'] == 'FAIL':
+        if debug:
+            return [], []
+        return []
     fmt = "%Y-%m-%d %H:%M:%S"
     run_start = dt.datetime.strptime(run_info['start'], fmt)
     run_stop = dt.datetime.strptime(run_info['stop'], fmt)
@@ -187,7 +191,9 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
         """Simple filter to obtain candidate info from raw text of log file
         """
         for _line in _lines:
-            if b'candidate' in _line or b'Significance corrected' in _line:
+            if (b'candidate' in _line or
+                b'Significance corrected' in _line or
+                b'Significance could not be corrected' in _line):
                 yield _line
 
     data = []
@@ -195,10 +201,10 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
     rgx_cand_no = "(?<=candidate \#)[0-9]+"
     rgx_ana_no = "(?<=Analysis \#)[0-9]+"
     rgx_xi = "(?<=S=)[0-9].[0-9]+"
-    rgx_xi_corrected = "(?<=Significance corrected from: )[0-9].[0-9]+ to [0-9].[0-9]+"  # Combined with check for 'Significance corrected' below
+    rgx_xi_corrected = "(?<=Significance corrected from: )[0-9].[0-9]+ to -?[0-9].[0-9]+"  # Combined with check for 'Significance corrected' below
     rgx_time = "(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
     for line in cands_from_log(lines):
-        if b'Significance corrected' not in line:
+        if b'corrected' not in line:
             trigger_no = int(re.search(rgx_trigger_no, line.decode()).group())
             cand_no = int(re.search(rgx_cand_no, line.decode()).group())
             ana_no = int(re.search(rgx_ana_no, line.decode()).group())
@@ -217,7 +223,9 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
                 data[-1].update(current)
             else:
                 data.append(current)
-
+        elif b'Significance could not be corrected' in line:
+            # When candidates form at the end of a run, correction is not always possible.
+            data[-1].update({'xip': -999.})
         else:  # Assumes correction messages always follows trigger messages, and that no new candidates form between
             # Trigger window closing (trigger becomes finalized) and when correction completes.
             xi, xip = (float(x) for x in re.search(rgx_xi_corrected, line.decode()).group().split(' to '))
