@@ -14,11 +14,11 @@ _ana_conf_repr_string = \
 | --------------------
 | Use Offsets : {use_offsets}
 | Use Rebins : {use_rebins}
-| Trailing Background (ms): [ -{bgt_shifted_t0}, -{duration_ext_ms} ]
-| Trailing Exclusion (ms): [ -{duration_ext_ms}, 0 ]
-| Search Windows (ms): {binsize_ms}
-| Leading Exclusion (ms): [ t_sw, t_sw + {duration_exl_ms} ]
-| Leading Background (ms): [ t_sw + {duration_exl_ms}, t_sw + {bgl_shifted_t1} ] 
+| Trailing Background (ms): [ -{bgt_shifted_t0}, -{_duration_ext_ms} ]
+| Trailing Exclusion (ms): [ -{_duration_ext_ms}, 0 ]
+| Search Windows (ms): {_binsize_ms}
+| Leading Exclusion (ms): [ t_sw, t_sw + {_duration_exl_ms} ]
+| Leading Background (ms): [ t_sw + {_duration_exl_ms}, t_sw + {bgl_shifted_t1} ] 
 |
 | .. t_sw = search window upper bin edge
 | 
@@ -95,8 +95,11 @@ class AnalysisConfig:
 
     def __repr__(self):
         kwargs = vars(self)
-        kwargs.update({"bgl_shifted_t1": self.duration_bgl_ms + self.duration_exl_ms,
-                       "bgt_shifted_t0": self.duration_bgt_ms + self.duration_ext_ms})
+
+        # Add two new keys:
+        kwargs.update(bgl_shifted_t1=self.duration_bgl_ms+self.duration_exl_ms,
+                      bgt_shifted_t0=self.duration_bgt_ms+self.duration_ext_ms)
+
         return _ana_conf_repr_string.format(**kwargs)
 
     @classmethod
