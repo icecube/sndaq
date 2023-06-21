@@ -4,7 +4,30 @@ import numpy as np
 from configparser import ConfigParser
 import ast  # TODO: Replace with pyyaml
 from sndaq.buffer import windowbuffer
-from sndaq.trigger import BasicTrigger, Trigger
+from sndaq.trigger import PrimaryTrigger, Trigger
+
+_ana_conf_repr_string = \
+    """Analysis Configuration
+======================
+| 
+| Buffer Configuration
+| --------------------
+| Use Offsets : {use_offsets}
+| Use Rebins : {use_rebins}
+| Trailing Background (ms): [ -{bgt_shifted_t0}, -{duration_ext_ms} ]
+| Trailing Exclusion (ms): [ -{duration_ext_ms}, 0 ]
+| Search Windows (ms): {binsize_ms}
+| Leading Exclusion (ms): [ t_sw, t_sw + {duration_exl_ms} ]
+| Leading Background (ms): [ t_sw + {duration_exl_ms}, t_sw + {bgl_shifted_t1} ] 
+|
+| .. t_sw = search window upper bin edge
+| 
+| DOM Qualification
+| -----------------
+| Rate: [{min_bkg_rate}, {max_bkg_rate}]
+| Fano Factor: [{min_bkg_fano}, {max_bkg_fano}]
+| Abs. Skew < {max_bkg_abs_skew}
+"""
 
 
 class AnalysisConfig:
@@ -20,7 +43,8 @@ class AnalysisConfig:
     _duration_ext_ms = int(30e3)  # ms (30 s)
     _dur_signi_buffer = int(600e3)  # ms (10 min)
     _dur_trigger_window = int(30e3)
-    _trigger_level = BasicTrigger
+    _trigger_level = PrimaryTrigger
+
     # _trigger_level.threshold = 5.8
 
     def __init__(self, use_offsets, use_rebins, binsize_ms,
@@ -28,7 +52,6 @@ class AnalysisConfig:
                  min_active_doms=None, min_bkg_rate=None, max_bkg_rate=None,
                  min_bkg_fano=None, max_bkg_fano=None, max_bkg_abs_skew=None):
         """
-
         Parameters
         ----------
         use_offsets : bool
@@ -563,6 +586,11 @@ class Analysis:
         # Analysis becomes triggerable when trailing background has filled
         self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / config.base_binsize)
         self.n = 0
+
+    def __repr__(self):
+        repr_str = f"SNDAQ Binned Search #{int((self.binsize + self.offset)/self._base_binsize):<2d}: " +\
+            f"{self.binsize} +({self.offset}) s"
+        return repr_str
 
     def reset_accum(self):
         """Reset Analysis accumulator sums after collecting 500 ms of data
