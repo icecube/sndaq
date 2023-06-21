@@ -2,7 +2,7 @@
 """
 import numpy as np
 import glob
-from sndaq.reader import SN_PayloadReader
+from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
 from sndaq.buffer import stagingbuffer
 
 
@@ -30,14 +30,17 @@ class DataHandler:
         self._data = stagingbuffer(size=self._staging_depth, ndom=ndom, dtype=dtype)  #np.zeros((ndom, self._staging_depth), dtype=dtype)
         self._raw_utime = np.zeros(self._staging_depth, dtype=np.uint32)
 
-        self._file = None
-        self._file_glob = None
+        self._scaler_file = None
+        self._scaler_file_glob = None
         self._pay = None
         self._start_utime = None
         self._file_start_utime = None
 
+        self._pdaqtrigger_file = None
+        self._pdaqtrigger_file_glob = None
+
     @property
-    def files(self):
+    def scaler_files(self):
         """List of SN scaler file paths
 
         Returns
@@ -45,9 +48,21 @@ class DataHandler:
         files : list
             Paths to files containing unprocessed sn scaler data
         """
-        return self._file_glob
+        return self._scaler_file_glob
 
-    def get_data_files(self, directory):
+    @property
+    def pdaqtrigger_files(self):
+        """List of SN scaler file paths
+
+        Returns
+        -------
+        files : list
+            Paths to files containing unprocessed sn scaler data
+        """
+        return self._pdaqtrigger_file_glob
+
+    def get_scaler_files(self, directory):
+        # TODO: Move to file handler
         """Get SN scaler files from a directory
 
         Parameters
@@ -55,9 +70,20 @@ class DataHandler:
         directory : str | os.PathLike
             Directory to search for SN data files
         """
-        self._file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat'))))  # May need to check sorting order
+        self._scaler_file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat'))))  # May need to check sorting order
 
-    def set_file(self, filename):
+    def get_pdaqtrigger_files(self, directory):
+        # TODO: Move to file handler
+        """Get pDAQ trigger files from a directory
+
+        Parameters
+        ----------
+        directory : str | os.PathLike
+            Directory to search for pDAQ files
+        """
+        self._pdaqtrigger_file_glob = sorted(glob.glob('/'.join((directory, 'pdaqtriggers*.dat'))))
+
+    def set_scaler_file(self, filename):
         """Set current SN scaler data file
 
         Parameters
@@ -65,7 +91,17 @@ class DataHandler:
         filename : str | os.PathLike
             String or path of SN Scaler data file
         """
-        self._file = SN_PayloadReader(filename)
+        self._scaler_file = SN_PayloadReader(filename)
+
+    def set_pdaqtrigger_file(self, filename):
+        """Set current SN scaler data file
+
+        Parameters
+        ----------
+        filename : str | os.PathLike
+            String or path of SN Scaler data file
+        """
+        self._pdaqtrigger_file = PDAQ_PayloadReader(filename)
 
     def read_payload(self):
         """Read one SN scaler payload from the current file
@@ -76,7 +112,7 @@ class DataHandler:
         sndaq.reader.SN_Payload
 
         """
-        self._pay = next(self._file)
+        self._pay = next(self._scaler_file)
 
     @property
     def payload(self):
@@ -225,4 +261,42 @@ class DataHandler:
             Scaler bin size in units 0.1 ns from file
         """
         return self._scaler_udt
+
+    @staticmethod  # TODO Change this away from static method when using config
+    def get_cand_rmu(cand):
+        """Update candidate with R_mu around trigger time
+
+        Parameters
+        ----------
+        cand : sndaq.trigger.Candidate
+        """
+        t0 = None
+        rebin_factor = cand.trigger.binsize // 500
+        trigger_utime = (cand.trigger.t - cand.trigger.t.astype('datetime64[Y]')).astype('timedelta64[ns]').astype(int)
+        udt = int(500e6)  # 500 ms, in ns
+
+        # TODO: Make this bases this on config or duration of files. currently this assumes ~60 s per rate file
+        nbins = 2 * 60 * len(cand.rmu_files+1)
+        rmu_base = np.zeros(nbins)
+        utime_binned = np.arange(nbins) * udt
+
+        for file in cand.rmu_files:
+            # TODO: Change this to reference class member (IE self.pdaqtrigger_reader) for configured data sources
+            with PDAQ_PayloadReader(file) as rdr:
+                rmu = rdr.read_payloads()
+            utime = (rmu['t'] - rmu['t'].astype('datetime64[Y]')).astype(int)
+            if not t0:
+                # This ensures bin edges align with trigger bin edge
+                t0 = trigger_utime - udt * (1 + (trigger_utime - utime[0])//udt)
+
+            idx = utime_binned.searchsorted(utime - t0)
+            np.add.at(rmu_base, idx, rmu['rmu'])
+
+        # TODO: Make this based on config, rather than hardcoded 500 (ms)
+        idx = np.arange(nbins).reshape(-1, 1) + np.arange(rebin_factor)
+        # Obtain muon rate estimation in trigger binsize by summing over every `rebin_factor`-sized slice of bins
+        rmu_trigger = np.append(rmu_base, np.zeros(rebin_factor - 1))[idx].sum(axis=1)
+        cand.rmu_base = rmu_base / (rebin_factor * 0.5)  # Report in units Hz
+        cand.rmu_trigger = rmu_trigger / 0.5  # Report in units Hz
+
 
