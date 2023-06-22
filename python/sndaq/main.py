@@ -1,11 +1,11 @@
 """PySNDAQ Main Function"""
 
 import numpy as np
-from .analysis import AnalysisHandler, AnalysisConfig
-from .filehandler import FileHandler
-from .datahandler import DataHandler
-from .trigger import TriggerHandler
-from .detector import Detector
+from sndaq.analysis import AnalysisHandler, AnalysisConfig
+from sndaq.filehandler import FileHandler
+from sndaq.datahandler import DataHandler
+from sndaq.trigger import TriggerHandler
+from sndaq.detector import Detector
 
 if __name__ == "__main__":
 
@@ -14,7 +14,7 @@ if __name__ == "__main__":
     ana_config = AnalysisConfig.from_config(conf_path=ana_conf_path)
     ana = AnalysisHandler(ana_config)
 
-    fh_conf_path = "../../data/config/default.config"
+    fh_conf_path = "../../data/config/cobalt_test.config"
     fh = FileHandler.from_config(conf_path=fh_conf_path)
 
     alert = TriggerHandler()
