@@ -59,7 +59,10 @@ class FileHandler:
         self.dir_config = dir_config
         self.dir_pdaq = dir_pdaq
         self.dir_log = dir_log
-        self.dir_pdaq_trigger = dir_pdaq_trigger
+        if dir_pdaq_trigger:
+            self.dir_pdaq_trigger = dir_pdaq_trigger
+        else:
+            self.dir_pdaq_trigger = './'
         # self.dir_pdaq_trigger = '/home/sgris/Code/IceCube/sndaq/pysndaq/scratch/data/pdaq_triggers'
         self.dir_pdaq_trigger_bkp = dir_pdaq_trigger_bkp
         self.dir_log = dir_log
@@ -79,8 +82,13 @@ class FileHandler:
         # Example: sn_260295_000431_133620063_133930082.dat
         self.scaler_data_pattern = 'sn_*_*_*_*.dat'
         self.pdaq_trigger_files = None
-        self.pdaq_trigger_pattern = os.path.join(self.dir_pdaq_trigger, f'pDaqTriggers_{self.run_info["year"]}_*.dat')
-
+        if self.run_info:
+            self.pdaq_trigger_pattern = os.path.join(self.dir_pdaq_trigger, f'pDaqTriggers_{self.run_info["year"]}_*.dat')
+        else:
+            import datetime
+            # TODO: Add better handling for this, if runinfo was properly handled this would be unecessary
+            self.pdaq_trigger_pattern = os.path.join(self.dir_pdaq_trigger,
+                                                     f'pDaqTriggers_{datetime.datetime.now().year}_*.dat')
         # TODO: Add checks for variable data sources
 
     @classmethod
@@ -111,6 +119,8 @@ class FileHandler:
                 raise TypeError(f"Config.: {conf} is missing a required field: '{bad_field}'") from err
             elif "got an unexpected keyword argument" in msg:
                 raise TypeError(f"Config.: {conf} contains an unexpected field: '{bad_field}'") from err
+            else:
+                raise err
 
     def get_scalers_from_pdaq(self):
         """Searches `dir_pdaq` for new scaler files, grabs them, unpacks them, and moves scaler to `dir_scalers`

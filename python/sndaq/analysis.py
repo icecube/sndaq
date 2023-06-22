@@ -512,6 +512,7 @@ class AnalysisHandler:
             self.reset_accumulator()
             self.buffer_analysis.append(accumulated_data)
             self.update_analyses()
+            self.process_triggers()
 
     def process_triggers(self):
         """Check if any analysis meets the primary trigger threshold.
