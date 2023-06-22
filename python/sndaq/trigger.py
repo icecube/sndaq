@@ -33,7 +33,7 @@ class PrimaryTrigger(_TriggerLevel):
     """
     name = 'primary'
     threshold = 4.0
-    threshold_corr = 4.0
+    threshold_corr = -np.inf
 
     @classmethod
     def process(cls, trigger):
@@ -53,7 +53,7 @@ class BasicTrigger(_TriggerLevel):
     @classmethod
     def process(cls, trigger):
         print('Basic Trigger Processing...')
-        PrimaryTrigger.process(trigger)
+        print(' - Would perform muon correction')
 
 
 class SNWGTrigger(_TriggerLevel):
@@ -66,7 +66,6 @@ class SNWGTrigger(_TriggerLevel):
     @classmethod
     def process(cls, trigger):
         print('SN-WG Processing...')
-        BasicTrigger.process(trigger)
 
 
 class SNEWSTrigger(_TriggerLevel):
@@ -79,7 +78,6 @@ class SNEWSTrigger(_TriggerLevel):
     @classmethod
     def process(cls, trigger):
         print('SNEWS Processing...')
-        SNWGTrigger.process(trigger)
 
 
 class SilverTrigger(_TriggerLevel):
@@ -92,7 +90,6 @@ class SilverTrigger(_TriggerLevel):
     @classmethod
     def process(cls, trigger):
         print('Silver Processing...')
-        SNEWSTrigger.process(trigger)
 
 
 class GoldTrigger(_TriggerLevel):
@@ -105,7 +102,6 @@ class GoldTrigger(_TriggerLevel):
     @classmethod
     def process(cls, trigger):
         print('Gold Processing...')
-        SilverTrigger.process(trigger)
 
 
 class TriggerConfig:
@@ -118,6 +114,7 @@ class TriggerConfig:
     # Also, "___TriggerLevel" refers to muon-corrected triggers. For now this scheme is reversed in PySNDAQ,
     # As I (sgriswold) find this more intuitive, and am starting with testing against triggers w/o muon correction
     _trigger_levels = sorted((
+        PrimaryTrigger,
         BasicTrigger,
         SNWGTrigger,
         SNEWSTrigger,
@@ -158,16 +155,17 @@ class TriggerHandler(TriggerConfig):
         -------
 
         """
-        trigger_level = next((level for level in self._trigger_levels if (trigger.xi >= level.threshold or
-                                                                          trigger.xi_corr >= level.threshold_corr)),
-                             None)
-        trigger_level.process(trigger)
+        levels_to_process = [level for level in self._trigger_levels if (trigger.xi >= level.threshold or
+                                                                         trigger.xi_corr >= level.threshold_corr)]
+        # Process from highest level to lowest
+        for level in reversed(levels_to_process):
+            level.process(trigger)
 
 
 class Trigger:
     """Container object for SNDAQ Trigger Candidate
     """
-    def __init__(self, xi=0, xi_corr=0, t=0, binsize=None, offset=None):
+    def __init__(self, xi=0, xi_corr=0, t=0, binsize=0, offset=0, trigger_no=0, cand_no=0):
         # Parameters
         # ----------
         # threshold : np.ndarray
@@ -189,15 +187,22 @@ class Trigger:
             Size of analysis search window in ms from which the trigger was issued
         offset : int
             Offset of search window in ms from which the trigger was issued
+        trigger_no : int
+            Number of trigger for the current candidate
+        cand_no : int
+            Number of candidate for the current run
         """
         self.xi = xi
         self.xi_corr = xi_corr
         self.t = t
         self.binsize = binsize
         self.offset = offset
+        self.trigger_no = trigger_no
+        self.cand_no = cand_no
 
     def __repr__(self):
-        return f"xi={self.xi:5.3f} in {self.binsize / 1e3:>5.1f} +({self.offset / 1e3}) s Analysis @t={self.t} s"
+        return f"Candidate {self.cand_no:>3d}, Trigger {self.trigger_no:>3d}: "  \
+               f"xi={self.xi:5.3f} in {self.binsize / 1e3:>5.1f} +({self.offset / 1e3}) s Analysis @t={self.t} s"
 
     def reset(self):
         self.xi = 0
