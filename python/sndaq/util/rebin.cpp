@@ -27,14 +27,14 @@ unsigned long raw_udt = 20000000;
 *       Sequence of SN scalers, assumed to be binned at 1.6384 ms.
 */
 std::pair<py::array_t<unsigned int>, py::array_t<unsigned int>> rebin_scalers(
-    unsigned long raw_utime,
-    const unsigned long & payload_utime,
+    unsigned long long raw_utime,
+    const unsigned long long & payload_utime,
     const py::bytes & scaler_bytes) {
 
     std::vector<unsigned int> raw_counts;
     std::vector<unsigned int> idx_counts;
 
-    unsigned long scaler_utime;
+    unsigned long long scaler_utime;
     unsigned int raw_count = 0;
     double frac;
     double frac_count=0;
