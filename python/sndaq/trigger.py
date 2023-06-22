@@ -165,7 +165,7 @@ class TriggerHandler(TriggerConfig):
 class Trigger:
     """Container object for SNDAQ Trigger Candidate
     """
-    def __init__(self, xi=0, xi_corr=0, t=0, binsize=None, offset=None):
+    def __init__(self, xi=0, xi_corr=0, t=0, binsize=0, offset=0, trigger_no=0, cand_no=0):
         # Parameters
         # ----------
         # threshold : np.ndarray
@@ -187,15 +187,22 @@ class Trigger:
             Size of analysis search window in ms from which the trigger was issued
         offset : int
             Offset of search window in ms from which the trigger was issued
+        trigger_no : int
+            Number of trigger for the current candidate
+        cand_no : int
+            Number of candidate for the current run
         """
         self.xi = xi
         self.xi_corr = xi_corr
         self.t = t
         self.binsize = binsize
         self.offset = offset
+        self.trigger_no = trigger_no
+        self.cand_no = cand_no
 
     def __repr__(self):
-        return f"xi={self.xi:5.3f} in {self.binsize / 1e3:>5.1f} +({self.offset / 1e3}) s Analysis @t={self.t} s"
+        return f"Candidate {self.cand_no:>3d}, Trigger {self.trigger_no:>3d}: "  \
+               f"xi={self.xi:5.3f} in {self.binsize / 1e3:>5.1f} +({self.offset / 1e3}) s Analysis @t={self.t} s"
 
     def reset(self):
         self.xi = 0

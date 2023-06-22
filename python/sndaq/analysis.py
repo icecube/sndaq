@@ -320,6 +320,8 @@ class AnalysisHandler:
         self._accum_data = np.zeros(ndom, dtype=dtype)
 
         self.current_trigger = Trigger()
+        self.trigger_count = 0
+        self.cand_count = 0
         self.trigger_xi = 0.
         self.triggered_analysis = None
         self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
@@ -512,7 +514,7 @@ class AnalysisHandler:
             self.update_analyses()
 
     def process_triggers(self):
-        """Check if any analysis meets the basic trigger condition.
+        """Check if any analysis meets the primary trigger threshold.
         """
         # Probably out of intended scope for analysis object
         xi = np.array([ana.xi if (ana.is_online and ana.is_triggerable) else 0
@@ -524,6 +526,7 @@ class AnalysisHandler:
 
         # Check uncorr. xi against lowest threshold (uncorr. or corr.) to initiate trigger processing
         if xi_max >= self.config.trigger_level.threshold and xi_max > self.current_trigger.xi:
+            self.trigger_count += 1
             # Extend trigger window after new highest trigger
             self.open_trigger_window()
             idx = xi.argmax()
@@ -531,7 +534,9 @@ class AnalysisHandler:
             t = (self.buffer_analysis.n - ana.n_to_trigger) * 0.5
 
             # Corrected signi is set upon trigger becoming finalized
-            self.current_trigger = Trigger(xi=ana.xi, xi_corr=0, t=t, binsize=ana.binsize, offset=ana.offset)
+            self.current_trigger = Trigger(xi=ana.xi, xi_corr=0, t=t, binsize=ana.binsize, offset=ana.offset,
+                                           trigger_no=self.trigger_count, cand_no=self.cand_count+1)
+            # TODO: Fix counting for cands
 
     def get_buffered_xi(self, binsize):
         """Return buffered xi in requested binsize
@@ -584,7 +589,6 @@ class AnalysisHandler:
             If True, the trigger is ready to be processed, the trigger window (`open_trigger_window()`) is closed
             If False, the trigger window has not yet closed, more data must be processed
         """
-        # TODO: Make muon correction contigent upon this condition
         return self.current_trigger.xi > 0 and not self.trigger_pending
 
 
