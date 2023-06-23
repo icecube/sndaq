@@ -2,6 +2,7 @@
 import os
 import sndaq
 from sndaq.analysis import AnalysisConfig
+from sndaq.filehandler import FileHandler
 
 import unittest
 import numpy.testing as npt
@@ -9,7 +10,7 @@ import numpy.testing as npt
 
 class TestConfig(unittest.TestCase):
 
-    def test_from_config(self):
+    def test_analysis_config(self):
         """Analysis configuration from INI file
         """
         cfile = os.path.join(sndaq.base_path, 'data/config/analysis.config')
@@ -53,3 +54,16 @@ class TestConfig(unittest.TestCase):
 | Abs. Skew < 1.2
 """
         self.assertEqual(conf_str, config.__repr__())
+
+    def test_filehandler(self):
+        """FileHandler configuration from INI file
+        """
+        cfile = os.path.join(sndaq.base_path, 'data/config/default.config')
+
+        # This should raise an exception due to missing 'filesystem' entry.
+        with self.assertRaises(KeyError) as cm:
+            fh = FileHandler.from_config(conf_path=cfile)
+
+        ke = cm.exception
+        self.assertTrue('filesystem' in ke.args)
+
