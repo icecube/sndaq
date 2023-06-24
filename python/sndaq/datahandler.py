@@ -4,6 +4,7 @@ import numpy as np
 import glob
 from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
 from sndaq.buffer import stagingbuffer
+from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
 
 
 class DataHandler:
@@ -160,7 +161,7 @@ class DataHandler:
         -----
         It is assumed that idx_dom corresponds to the current payload contained by _pay
         """
-        data, idx_data = self.rebin_scalers(self._pay.utime, self._pay.scaler_bytes)
+        data, idx_data = c_rebin_scalers(self._raw_utime[0], self._pay.utime, self._pay.scaler_bytes)
         if data.size > 0:
             self._data.add(data, idx_dom, idx_data)
         self._payloads_read[idx_dom] += 1

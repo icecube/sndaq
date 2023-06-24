@@ -504,7 +504,7 @@ class AnalysisHandler:
             2ms data for each DOM at a particular timestamp
         """
         self.buffer_raw.append(value)
-        idx = value.nonzero()[0]
+        idx = value.nonzero()[0]  # Returns tuple, the first element of which is indices of non-zero elem
         if not self.accumulate(value[idx], idx):
             # Accumulator indicates time to reset, as base analysis bin of data is ready
             # TODO: Find a more intuitive way of doing this.
@@ -512,6 +512,7 @@ class AnalysisHandler:
             self.reset_accumulator()
             self.buffer_analysis.append(accumulated_data)
             self.update_analyses()
+            self.process_triggers()
 
     def process_triggers(self):
         """Check if any analysis meets the primary trigger threshold.

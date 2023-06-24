@@ -1,32 +1,32 @@
 """PySNDAQ Main Function"""
 
-import configparser as cp
 import numpy as np
 from sndaq.analysis import AnalysisHandler, AnalysisConfig
 from sndaq.filehandler import FileHandler
 from sndaq.datahandler import DataHandler
+from sndaq.trigger import TriggerHandler
 from sndaq.detector import Detector
 
 if __name__ == "__main__":
 
     # Setup core components
-    ana_conf_path = "../data/config/analysis.config"
+    ana_conf_path = "../../data/config/analysis.config"
     ana_config = AnalysisConfig.from_config(conf_path=ana_conf_path)
     ana = AnalysisHandler(ana_config)
 
-    fh_conf_path = "../data/config/default.config"
-    fh_config = AnalysisConfig.from_config(conf_path=fh_conf_path)
-    fh = FileHandler(fh_config)
+    fh_conf_path = "../../data/config/cobalt_test.config"
+    fh = FileHandler.from_config(conf_path=fh_conf_path)
 
+    alert = TriggerHandler()
     dh = DataHandler()
-    i3 = Detector('../data/config/full_dom_table.txt')
+    i3 = Detector('../../data/config/full_dom_table.txt')
 
     # Main SNDAQ Loop
     dh.get_scaler_files(fh.dir_scaler)
     for file in dh.scaler_files:
         print(f'Processing {file}')
-        dh.set_scaler_file(file)  # TODO set up as context ("with dh(file) as current_file; current_file.read_payload()")
-        ### Process file
+        dh.set_scaler_file(file)
+        # Process file
         # Setup variables from first payload in file
         dh.read_payload()
         while not i3.isvalid_dom(dh.payload.dom_id):
@@ -40,7 +40,7 @@ if __name__ == "__main__":
 
         while dh.payload is not None:
 
-            # Advance buffer after 2 ms bin is ready
+            # Add to the current 2ms bin until it has filled...
             while dh.payload is not None and dh.payload.utime <= dh._raw_utime[1]:
                 idx_dom = i3.get_dom_idx(dh.payload.dom_id)
                 dh.update_buffer(idx_dom)  # Ensures first payload is added to buffer
@@ -49,16 +49,27 @@ if __name__ == "__main__":
                 while dh.payload is not None and not i3.isvalid_dom(dh.payload.dom_id):  # Skip IceTop
                     dh.read_payload()
 
+            # Then add the filled 2ms bin to raw analysis buffer
             if dh._pay is not None:
-                # dh._pay is None only if EOF is reached, this ensures raw bins that span files
-                # receive all contributing scalers.
-                ana.update(dh._data[:, 0])
-                # Eval trigger
+                # dh._pay is None only if EOF is reached
+                # When this line is reached, and dh._pay is None, the current scaler file ended before
+                # The filling of the current bin ended. Wait for the next file
+                # TODO: Figure out a better way of handling this
+
+                # Adds 2ms data to Raw analysis buffer and accumulator for 500ms buffer
+                # If 500 ms of data has accumulated, this will also update the analyses
+                ana.update(dh._data.front)
                 dh.advance_buffer()
 
-        # If payload is none, then EOF reached. Close file
-        dh._scaler_file.close()
+            # If a trigger has been finalized, process it.
+            if ana.trigger_finalized:
+                ana.cand_count += 1
+                alert.process_trigger(ana.current_trigger)
+                ana.current_trigger.reset()
+                ana.trigger_count = 0
+                print('')
 
-    print(ana.config)
+        # If payload is none, then EOF reached. Close file and move to next one
+        dh._scaler_file.close()
 
 
