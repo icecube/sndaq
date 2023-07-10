@@ -145,7 +145,6 @@ class DataHandler:
         """Roll front of staging buffer off the end, add empty space at back
         """
         self._raw_utime += self._raw_udt  # TODO: Decide if this could instead be tracked as integer of first bin utime
-        self._raw_utime += self._raw_udt
         # Can this rolling operation be done with np.add.at(data[1:]-data[:-1], arange(1, data.size-1)?
         self._data.advance()
 
