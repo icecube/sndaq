@@ -8,27 +8,67 @@ from sndaq.trigger import TriggerHandler
 from sndaq.detector import Detector
 from sndaq.communication import LiveMessageSender
 
-if __name__ == "__main__":
+from multiprocessing import Process
+
+import logging
+logging.basicConfig(filename='./pysndaq.log',
+                    filemode='a',
+                    level=logging.DEBUG)
+logger = logging.getLogger('pysndaq')
+
+
+def launch(*args, **kwargs):
+    logger.info(f"Launching SNDAQ with the following Configuration:\nargs:{args}\nkwargs:{kwargs}")
+    proc = Process(target=main, args=args, kwargs=kwargs)
+    logging.info(f"== START ==")
+    proc.start()
+
+
+def main(*args, **kwargs):
+
+    logging.info(f"Creating ZMQMoniClient sending to expcont:6668")
     lms = LiveMessageSender(moni_host='expcont', moni_port=6668)
-    lms.fra_status(status='QUEUED', id=3)
+
+    logging.info(f"Registered FRA request")
+    lms.fra_status(status='QUEUED', request_id=None)  # Request ID is assigned by comms module
     try:
 
-        # Setup core components
-        ana_conf_path = "../../data/config/analysis.config"
-        ana_config = AnalysisConfig.from_config(conf_path=ana_conf_path)
+        # === Setup core components ===
+        # == Analysis ==
+        # If another conf is not provided, use the defaults
+        if not any([conf not in kwargs for conf in ('ana_conf', 'ana_conf_path')]):
+            ana_conf_path = "../../data/config/analysis.config"
+            ana_config = AnalysisConfig.from_config(conf_path=ana_conf_path)
+        # A config object takes priority over a config file
+        elif 'ana_conf' in kwargs:
+            ana_config = kwargs['ana_conf']
+        else:
+            ana_config = AnalysisConfig.from_config(conf_path=kwargs['ana_conf_path'])
         ana = AnalysisHandler(ana_config)
 
-        fh_conf_path = "../../data/config/cobalt_test.config"
+        # == FileHandler ==
+        # If a config is not provided, use the default
+        if 'fh_conf_path' not in kwargs:
+            fh_conf_path = "../../data/config/cobalt_test.config"
+        else:
+            fh_conf_path = kwargs['fh_conf_path']
         fh = FileHandler.from_config(conf_path=fh_conf_path)
 
         alert = TriggerHandler()
         dh = DataHandler()
         i3 = Detector('../../data/config/full_dom_table.txt')
 
+        lms.fra_status(status='IN PROCESS', request_id=lms.request_id)
 
-        lms.fra_status(status='IN PROCESS', id=3)
+        if 'no_run_mode' in kwargs:
+            if kwargs['no_run_mode']:
+                raise Exception('SNDAQ was launched in `no_run_mode`, execution was automatically aborted.')
+
+        start_time = kwargs['start_time'] if 'start_time' in kwargs else None
+        stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
+
         # Main SNDAQ Loop
-        dh.get_scaler_files(fh.dir_scaler)
+        dh.get_scaler_files(fh.dir_scaler, start_time, stop_time)
         for file in dh.scaler_files:
             print(f'Processing {file}')
             dh.set_scaler_file(file)
@@ -78,16 +118,26 @@ if __name__ == "__main__":
             # If payload is none, then EOF reached. Close file and move to next one
             dh._scaler_file.close()
 
-        lms.fra_result(data={'PLACEHOLDER_KEY': 'PLACEHOLDER_VALUE'}, id=lms.request_id)
-        lms.fra_status(status='SUCCESS', id=lms.request_id)
+        # TODO Move logger messages into function, main shouldn't be too cluttered
+        logger.info(f'FRA Request {lms.request_id} Completed')
+        lms.fra_result(data={'PLACEHOLDER_KEY': 'PLACEHOLDER_VALUE'}, request_id=lms.request_id)
 
+        logger.info(f'Results sent to live ({lms.request_id})')
+        lms.fra_status(status='SUCCESS', request_id=lms.request_id)
+        logger.info(f'Live status marked as \'SUCCESS\' ({lms.request_id})')
     except KeyboardInterrupt as e:
+        logger.error(str(e))
         lms.fra_status('ERROR', lms.request_id)
         lms.sender.send_moni(varname='sndaq_fra_error', prio=3, id=lms.request_id, value="Manual Abort")
     except Exception as e:
+        logger.error(str(e))
         lms.fra_status('ERROR', lms.request_id)
         lms.sender.send_moni(varname='sndaq_fra_error', prio=3, id=lms.request_id, value=str(e))
     finally:
+
+        logger.info('SNDAQ Shutting Down')
+        logger.info('Closing ZMQMoniClient')
         lms.sender.close()
+        logger.info('=== STOP ===')
 
 
