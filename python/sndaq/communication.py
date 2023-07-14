@@ -11,7 +11,7 @@ try:
 except ImportError as e:
     # If running on any system other than SP(T)S only throw a warning; else, raise an excception
     if not any([host in os.uname()[1].lower() for host in ['spts', 'sps']]):
-        warnings.warn("Missing Livecore! sndaq.comms will not be properly initialized")
+        warnings.warn("Missing Livecore! sndaq.communications will not be properly initialized")
     else:
         raise ImportError(e) from None
 
@@ -38,14 +38,14 @@ class LiveMessageSender(object):
             cls.instance.request_id = None
         return cls.instance
 
-    def fra_status(self, status, id=None):
+    def fra_status(self, status, request_id=None):
         """Send FRA status update to I3Live
 
         Parameters
         ----------
         status : str
             Status of FRA request
-        id :
+        request_id :
             Unique request ID for i3live database
         Returns
         -------
@@ -54,7 +54,7 @@ class LiveMessageSender(object):
         if status not in self._fra_statuses:
             raise ValueError("Unknown status {status}, see member `_fra_statuses` for valid values")
         elif status == 'QUEUED':
-            if id is None:
+            if request_id is None:
                 self.request_id = unique_id()
             err_state = 0
         elif status == 'FAILED':
@@ -65,22 +65,21 @@ class LiveMessageSender(object):
             pass  # Do something to de-register alert with sender
         else:
             err_state = 0
-        self.sender.send_moni(varname='sndaq_fra_status', prio=3, value=status, id=id)
+        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value=status, request_id=request_id)
         return err_state
 
-
-    def fra_result(self, data, id):
+    def fra_result(self, data, request_id):
         """Send FRA result to I3Live
 
         Parameters
         ----------
         data : dict
             Dictionary of fields in SNDAQ alert handled by alerthandler
-        id : str
+        request_id : str
             Unique request ID for i3live database
 
         Returns
         -------
 
         """
-        self.sender.send_moni(varname='sndaq_fra_result', prio=3, value=data, id=id)
+        self.sender.send_moni(varname='sndaq_fra_result', prio=3, value=data, request_id=request_id)
