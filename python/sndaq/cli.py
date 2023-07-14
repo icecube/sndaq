@@ -2,6 +2,12 @@
 """
 import argparse
 import sys
+import json
+import os
+import subprocess
+
+from sndaq.analysis import AnalysisConfig
+from sndaq.main import launch as launch_sndaq
 
 _no_arg_commands = []
 _command_parsers = {}
@@ -86,6 +92,57 @@ def _setup_process_parser(subparsers):
     parser.add_argument('--conf', metavar='CONFIG_FILE', default=None,
                         help='Config. file for additional options')
 
+def _setup_process_json_parser(subparsers):
+    """Setup SNDAQ `processjson` command parser
+
+    Parameters
+    ----------
+    subparsers : argparse._SubParsersAction
+        argparse subparsers object
+    """
+    name = "process-json"
+    desc = "Process a chunk of SN Data, specified by a JSON"
+    parser = _setup_command_parser(subparsers, name, desc)
+
+    parser.add_argument('json', metavar='JSON', default=None,
+                        help='JSON {"use_offsets": "True", "fr_type": "CCSN", ...}')
+
+def _process_json(args):
+    """Execute SNDAQ `process-json` command
+
+    Parameters
+    ----------
+    args : Namespace
+        list of arguments produced by argparse
+    """
+    data_json = args.json
+    print(data_json, type(data_json))
+    data = json.loads(data_json.replace("'", '"'))
+    print(data, type(data))
+
+    if data['fr_type'] == 'CCSN':
+        ana_conf_path = os.path.join(__file__, '../../data/config/ccsn_fra.config')
+    elif data['fr_type'] == 'Merger':
+        ana_conf_path = os.path.join(__file__, '../../data/config/merger_fra.config')
+    else:
+        ana_conf_path = os.path.join(__file__, '../../data/config/analysis.config')
+    ana_conf = AnalysisConfig.from_config(conf_path=ana_conf_path)
+
+    # TODO: Request mfrere that live provide args using SNDAQ config keys
+    ana_conf.use_offsets = data['offset_search']
+    ana_conf.binsize_ms = data['bin_sizes']
+    ana_conf.duration_bgl_ms = data['bg_duration'][0]
+    ana_conf.duration_bgt_ms = data['bg_duration'][1]
+    ana_conf.duration_exl_ms = data['excl_duration'][0]
+    ana_conf.duration_ext_ms = data['excl_duration'][1]
+
+    # Needs a better name
+    fh_conf_path = os.path.join(__file__, '../../data/config/default.config')  # May want to have custom config for FRA
+
+    launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path,
+                 start_time=data['start_time'], stop_time=data['stop_time'],
+                 lightcurve=data['lc_duration'], no_run_mode=True)
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -102,6 +159,7 @@ def main():
     # They also extend the list `_no_arg_commands` and dict `_command_parsers`
     # This was done for the sake of readability
     _setup_process_parser(subparsers)
+    _setup_process_json_parser(subparsers)
     _setup_stop_parser(subparsers)
 
     # If no arguments or commands are provided, print the top-level help message
@@ -122,6 +180,9 @@ def main():
 
     if args.command == 'stop':
         print('SNDAQ Stopped!')
+    elif args.command == 'process-json':
+        print(args)
+        _process_json(args)
 
 
 if __name__ == "__main__":
