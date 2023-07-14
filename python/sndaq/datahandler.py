@@ -2,6 +2,11 @@
 """
 import numpy as np
 import glob
+import os
+import requests
+import json
+from time import sleep
+
 from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
 from sndaq.buffer import stagingbuffer
 from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
@@ -62,7 +67,11 @@ class DataHandler:
         """
         return self._pdaqtrigger_file_glob
 
-    def get_scaler_files(self, directory):
+    def get_run_no(self):
+        # TODO: IMPORTANT!!! DO NOT HARD CODE THIS
+        return 260299
+
+    def get_scaler_files(self, directory, start_time=None, stop_time=None, buffer_time_l=None, buffer_time_t=None):
         # TODO: Move to file handler
         """Get SN scaler files from a directory
 
@@ -70,8 +79,43 @@ class DataHandler:
         ----------
         directory : str | os.PathLike
             Directory to search for SN data files
+        start_time : str
+            date_time string for start of search
+        stop_time : str
+            date_time string for end of search
+        buffer_time_l : int
+            Amount of time for leading buffer in ms
+        buffer_time_t : int
+            Amount of time for trailing buffer in ms
         """
         self._scaler_file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat'))))  # May need to check sorting order
+
+        if start_time:
+            start_datetime = np.datetime64(start_time)
+            if stop_time:
+                stop_datetime = np.datetime64(stop_time)
+            else:
+                stop_datetime = start_datetime
+
+            # Estimate scaler file times
+            idc = np.array([os.path.basename(file).split('_')[2] for file in self._scaler_file_glob])
+
+            # TODO Figure out a better way of getting run start time
+            run_no = self.get_run_no()
+            DATA = {
+                'user': 'REDACTED',
+                'pass': 'REDACTED',
+                'run_number': run_no
+            }
+            sleep(1)  # Required to prevent accidental DDoS
+            # TODO: Add this to config
+            response = requests.post(url="https://virgo.icecube.wisc.edu/run_info/{run_no}", data=DATA)
+            data = json.loads(response.text)
+            run_start = np.datetime64(data['run_start'])
+            file_times = np.datetime64(60, 's') * idc + run_start  # Each file is about a minute
+            t0 = start_datetime - np.timedelta64(buffer_time_t, 'ms')  # Add a minute to ensure
+            t1 = stop_datetime + np.timedelta64(buffer_time_l, 'ms')  # Add a minute to ensure files
+            self._scaler_file_glob = np.where(self._scaler_file_glob, (t0 < file_times) & (file_times < t1))[0]
 
     def get_pdaqtrigger_files(self, directory):
         # TODO: Move to file handler
