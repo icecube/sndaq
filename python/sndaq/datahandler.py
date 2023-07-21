@@ -109,7 +109,7 @@ class DataHandler:
             }
             sleep(1)  # Required to prevent accidental DDoS
             # TODO: Add this to config
-            response = requests.post(url="https://virgo.icecube.wisc.edu/run_info/{run_no}", data=DATA)
+            response = requests.post(url=f"https://virgo.icecube.wisc.edu/run_info/{run_no}", data=DATA)
             data = json.loads(response.text)
             run_start = np.datetime64(data['run_start'])
             file_times = np.datetime64(60, 's') * idc + run_start  # Each file is about a minute

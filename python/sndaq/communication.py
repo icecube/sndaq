@@ -20,7 +20,7 @@ class LiveMessageSender(object):
     """Singleton Live message sender object
     """
     instance = None
-    _fra_statuses = ['QUEUED', 'IN PROGRESS', 'SUCCESS', 'ERROR']
+    _fra_statuses = ['QUEUED', 'IN PROGRESS', 'SUCCESS', 'FAIL']
 
     def __new__(cls, moni_host=None, moni_port=None):
         """
@@ -65,7 +65,7 @@ class LiveMessageSender(object):
             pass  # Do something to de-register alert with sender
         else:
             err_state = 0
-        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value={"status": status, "request_id": request_id})
+        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value={'status': status, "request_id": request_id})
         return err_state
 
     def fra_result(self, data, request_id):

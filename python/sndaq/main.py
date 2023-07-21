@@ -25,7 +25,7 @@ def launch(*args, **kwargs):
 
 
 def main(*args, **kwargs):
-
+    print('queued for processing')  # TODO: Cleanup from spts-test
     logging.info(f"Creating ZMQMoniClient sending to expcont:6668")
     lms = LiveMessageSender(moni_host='expcont', moni_port=6668)
 
