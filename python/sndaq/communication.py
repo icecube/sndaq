@@ -5,7 +5,7 @@ import os
 import json
 
 try:
-    from livecore.misc.util import unique_id, zmq_ctx
+    from livecore.util.misc import unique_id, zmq_ctx
     from livecore.messaging import zmqtransport as zt
     from livecore.messaging.moniclient import ZMQMoniClient
 except ImportError as e:
@@ -20,7 +20,7 @@ class LiveMessageSender(object):
     """Singleton Live message sender object
     """
     instance = None
-    _fra_statuses = ['QUEUED', 'IN PROGRESS', 'SUCCESS', 'FAIL']
+    _fra_statuses = ['QUEUED', 'IN PROGRESS', 'SUCCESS', 'ERROR']
 
     def __new__(cls, moni_host=None, moni_port=None):
         """
@@ -34,7 +34,7 @@ class LiveMessageSender(object):
         """
         if cls.instance is None:
             cls.instance = super(LiveMessageSender, cls).__new__(cls)
-            cls.instance.sender = zmq_ctx(ZMQMoniClient, svc='sndaq_fra', moni_host=moni_host, moni_port=moni_port)
+            cls.instance.sender = ZMQMoniClient(svc='sndaq_fra', moni_host=moni_host, moni_port=moni_port)
             cls.instance.request_id = None
         return cls.instance
 
@@ -52,7 +52,7 @@ class LiveMessageSender(object):
 
         """
         if status not in self._fra_statuses:
-            raise ValueError("Unknown status {status}, see member `_fra_statuses` for valid values")
+            raise ValueError(f"Unknown status {status}, see member `_fra_statuses` for valid values")
         elif status == 'QUEUED':
             if request_id is None:
                 self.request_id = unique_id()
@@ -65,7 +65,7 @@ class LiveMessageSender(object):
             pass  # Do something to de-register alert with sender
         else:
             err_state = 0
-        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value=status, request_id=request_id)
+        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value={"status": status, "request_id": request_id})
         return err_state
 
     def fra_result(self, data, request_id):
@@ -82,4 +82,4 @@ class LiveMessageSender(object):
         -------
 
         """
-        self.sender.send_moni(varname='sndaq_fra_result', prio=3, value=data, request_id=request_id)
+        self.sender.send_moni(varname='sndaq_fra_result', prio=3, value={"data": data, "request_id": request_id})

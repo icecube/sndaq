@@ -128,16 +128,16 @@ def main(*args, **kwargs):
     except KeyboardInterrupt as e:
         logger.error(str(e))
         lms.fra_status('ERROR', lms.request_id)
-        lms.sender.send_moni(varname='sndaq_fra_error', prio=3, id=lms.request_id, value="Manual Abort")
+        lms.sender.send_moni(varname='sndaq_fra_error', prio=2, value={'request_id': lms.request_id, "value": "Manual Abort"})
     except Exception as e:
         logger.error(str(e))
         lms.fra_status('ERROR', lms.request_id)
-        lms.sender.send_moni(varname='sndaq_fra_error', prio=3, id=lms.request_id, value=str(e))
+        lms.sender.send_moni(varname='sndaq_fra_error', prio=2, value={"request_id": lms.request_id, "err_msg": str(e)})
     finally:
 
         logger.info('SNDAQ Shutting Down')
         logger.info('Closing ZMQMoniClient')
-        lms.sender.close()
+        # lms.sender.close()
         logger.info('=== STOP ===')
 
 

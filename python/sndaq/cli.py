@@ -121,27 +121,28 @@ def _process_json(args):
     print(data, type(data))
 
     if data['fr_type'] == 'CCSN':
-        ana_conf_path = os.path.join(__file__, '../../data/config/ccsn_fra.config')
+        ana_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/ccsn_fra.config')
     elif data['fr_type'] == 'Merger':
-        ana_conf_path = os.path.join(__file__, '../../data/config/merger_fra.config')
+        ana_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/merger_fra.config')
     else:
-        ana_conf_path = os.path.join(__file__, '../../data/config/analysis.config')
+        ana_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/analysis.config')
     ana_conf = AnalysisConfig.from_config(conf_path=ana_conf_path)
 
     # TODO: Request mfrere that live provide args using SNDAQ config keys
     ana_conf.use_offsets = data['offset_search']
-    ana_conf.binsize_ms = data['bin_sizes']
-    ana_conf.duration_bgl_ms = data['bg_duration'][0]
-    ana_conf.duration_bgt_ms = data['bg_duration'][1]
-    ana_conf.duration_exl_ms = data['excl_duration'][0]
-    ana_conf.duration_ext_ms = data['excl_duration'][1]
+    ana_conf._binsize_ms = data['bin_sizes']
+    ana_conf._duration_bgl_ms = data['bg_duration'][0]
+    ana_conf._duration_bgt_ms = data['bg_duration'][1]
+    ana_conf._duration_exl_ms = data['excl_duration'][0]
+    ana_conf._duration_ext_ms = data['excl_duration'][1]
 
     # Needs a better name
-    fh_conf_path = os.path.join(__file__, '../../data/config/default.config')  # May want to have custom config for FRA
+    fh_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/default.config')  # May want to have custom config for FRA
 
     launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path,
                  start_time=data['start_time'], stop_time=data['stop_time'],
                  lightcurve=data['lc_duration'], no_run_mode=True)
+    print("queued for processing")
 
 
 def main():
