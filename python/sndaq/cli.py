@@ -141,7 +141,7 @@ def _process_json(args):
 
     launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path,
                  start_time=data['start_time'], stop_time=data['stop_time'],
-                 lightcurve=data['lc_duration'], no_run_mode=True)
+                 lightcurve=data['lc_duration'], no_run_mode=False)
     print("queued for processing")
 
 
