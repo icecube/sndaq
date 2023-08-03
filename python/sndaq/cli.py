@@ -8,6 +8,7 @@ import subprocess
 
 from sndaq.analysis import AnalysisConfig
 from sndaq.main import launch as launch_sndaq
+from sndaq import base_path
 
 _no_arg_commands = []
 _command_parsers = {}
@@ -107,6 +108,7 @@ def _setup_process_json_parser(subparsers):
     parser.add_argument('json', metavar='JSON', default=None,
                         help='JSON {"use_offsets": "True", "fr_type": "CCSN", ...}')
 
+
 def _process_json(args):
     """Execute SNDAQ `process-json` command
 
@@ -121,12 +123,18 @@ def _process_json(args):
     print(data, type(data))
 
     if data['fr_type'] == 'CCSN':
-        ana_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/ccsn_fra.config')
+        ana_conf_path = os.path.join(base_path, 'data/config/ccsn_fra.config')
     elif data['fr_type'] == 'Merger':
-        ana_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/merger_fra.config')
+        ana_conf_path = os.path.join(base_path, 'data/config/merger_fra.config')
     else:
-        ana_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/analysis.config')
+        ana_conf_path = os.path.join(base_path, 'data/config/analysis.config')
+
+    if not os.path.exists(ana_conf_path):
+        raise FileNotFoundError("Analysis Config `{}` not found")
+
     ana_conf = AnalysisConfig.from_config(conf_path=ana_conf_path)
+    if not ana_conf:
+        raise ValueError("Analysis Config {} is blank")
 
     # TODO: Request mfrere that live provide args using SNDAQ config keys
     ana_conf.use_offsets = data['offset_search']
@@ -137,7 +145,7 @@ def _process_json(args):
     ana_conf._duration_ext_ms = data['excl_duration'][1]
 
     # Needs a better name
-    fh_conf_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), '../../data/config/default.config')  # May want to have custom config for FRA
+    fh_conf_path = os.path.join(base_path, 'data/config/default.config')  # May want to have custom config for FRA
 
     launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path,
                  start_time=data['start_time'], stop_time=data['stop_time'],
