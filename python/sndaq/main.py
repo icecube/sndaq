@@ -6,6 +6,8 @@ from sndaq.filehandler import FileHandler
 from sndaq.datahandler import DataHandler
 from sndaq.trigger import TriggerHandler
 from sndaq.detector import Detector
+from sndaq import base_path
+from livecore.util.misc import exc_string
 from sndaq.communication import LiveMessageSender, get_unique_id
 from sndaq import base_path
 
@@ -58,7 +60,7 @@ def main(*args, **kwargs):
         dh = DataHandler()
         i3 = Detector(os.path.join(base_path, "data/config/full_dom_table.txt"))
 
-        lms.fra_status(status='IN PROCESS', request_id=lms.request_id)
+        lms.fra_status(status='IN PROGRESS', request_id=lms.request_id)
 
         if 'no_run_mode' in kwargs:
             if kwargs['no_run_mode']:
@@ -131,9 +133,10 @@ def main(*args, **kwargs):
         lms.fra_status('ERROR', lms.request_id)
         lms.sender.send_moni(varname='sndaq_fra_error', prio=2, value={'request_id': lms.request_id, "value": "Manual Abort"})
     except Exception as e:
-        logger.error(str(e))
+        logger.error(exc_string())
         lms.fra_status('ERROR', lms.request_id)
-        lms.sender.send_moni(varname='sndaq_fra_error', prio=2, value={"request_id": lms.request_id, "err_msg": str(e)})
+        lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={"request_id": lms.request_id, "err_msg": exc_string()})
+        #lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={"request_id": lms.request_id, "err_msg": str(e)})
     finally:
 
         logger.info('SNDAQ Shutting Down')
