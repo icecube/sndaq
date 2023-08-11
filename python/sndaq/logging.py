@@ -1,3 +1,5 @@
+"""Module for confiugring PySNDAQ's logging facilities
+"""
 import logging
 import os
 import shutil
@@ -7,7 +9,7 @@ from sndaq import base_path
 
 log_path = os.path.join(base_path, 'log')
 log_file = os.path.join(log_path, 'pysndaq.log')
-log_level = logging.DEBUG  # TODO: Set this up with config
+log_level = logging.DEBUG  # TODO: Set this up with config, and add option to disable logging
 _logger_name = 'pysndaq'
 
 
