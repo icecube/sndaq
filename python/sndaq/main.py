@@ -10,23 +10,19 @@ from sndaq.communication import LiveMessageSender
 
 from multiprocessing import Process
 
-import logging
-logging.basicConfig(filename='./pysndaq.log',
-                    filemode='a',
-                    level=logging.DEBUG)
-logger = logging.getLogger('pysndaq')
+from sndaq.logging import logger
 
 
 def launch(*args, **kwargs):
-    logger.info(f"Launching SNDAQ with the following Configuration:\nargs:{args}\nkwargs:{kwargs}")
+    logger.debug(f"Launching SNDAQ with the following Configuration:\nargs:{args}\nkwargs:{kwargs}")
     proc = Process(target=main, args=args, kwargs=kwargs)
-    logging.info(f"== START ==")
+    logger.info(f"== START ==")
     proc.start()
 
 
 def main(*args, **kwargs):
-    print('queued for processing')  # TODO: Cleanup from spts-test
-    logging.info(f"Creating ZMQMoniClient sending to expcont:6668")
+    # TODO: Cleanup from spts-test
+    logger.info(f"Creating LiveMessageSender sending to expcont:6668")
     lms = LiveMessageSender(moni_host='expcont', moni_port=6668)
 
     logging.info(f"Registered FRA request")
@@ -125,6 +121,7 @@ def main(*args, **kwargs):
         logger.info(f'Results sent to live ({lms.request_id})')
         lms.fra_status(status='SUCCESS', request_id=lms.request_id)
         logger.info(f'Live status marked as \'SUCCESS\' ({lms.request_id})')
+
     except KeyboardInterrupt as e:
         logger.error(str(e))
         lms.fra_status('ERROR', lms.request_id)

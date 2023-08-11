@@ -9,6 +9,7 @@ import subprocess
 from sndaq.analysis import AnalysisConfig
 from sndaq.main import launch as launch_sndaq
 from sndaq import base_path
+from sndaq.logging import logger
 
 _no_arg_commands = []
 _command_parsers = {}
@@ -118,9 +119,7 @@ def _process_json(args):
         list of arguments produced by argparse
     """
     data_json = args.json
-    print(data_json, type(data_json))
     data = json.loads(data_json.replace("'", '"'))
-    print(data, type(data))
 
     if data['fr_type'] == 'CCSN':
         ana_conf_path = os.path.join(base_path, 'data/config/ccsn_fra.config')
@@ -190,7 +189,7 @@ def main():
     if args.command == 'stop':
         print('SNDAQ Stopped!')
     elif args.command == 'process-json':
-        print(args)
+        logger.debug(f'Received `process-json` Command with args: {args}"')
         _process_json(args)
 
 
