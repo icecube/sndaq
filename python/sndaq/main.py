@@ -6,9 +6,11 @@ from sndaq.filehandler import FileHandler
 from sndaq.datahandler import DataHandler
 from sndaq.trigger import TriggerHandler
 from sndaq.detector import Detector
-from sndaq.communication import LiveMessageSender
+from sndaq.communication import LiveMessageSender, get_unique_id
+from sndaq import base_path
 
 from multiprocessing import Process
+import os
 
 from sndaq.logging import logger
 
@@ -25,8 +27,10 @@ def main(*args, **kwargs):
     logger.info(f"Creating LiveMessageSender sending to expcont:6668")
     lms = LiveMessageSender(moni_host='expcont', moni_port=6668)
 
-    logging.info(f"Registered FRA request")
-    lms.fra_status(status='QUEUED', request_id=None)  # Request ID is assigned by comms module
+    request_id = get_unique_id() if 'request_id' not in kwargs else kwargs['request_id']
+    logger.debug(f"Registered FRA request: {request_id}")
+
+    lms.fra_status(status='QUEUED', request_id=request_id)
     try:
 
         # === Setup core components ===
