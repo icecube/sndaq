@@ -37,7 +37,7 @@ def main(*args, **kwargs):
         # == Analysis ==
         # If another conf is not provided, use the defaults
         if not any([conf not in kwargs for conf in ('ana_conf', 'ana_conf_path')]):
-            ana_conf_path = "../../data/config/analysis.config"
+            ana_conf_path = os.path.join(base_path, "data/config/analysis.config")
             ana_config = AnalysisConfig.from_config(conf_path=ana_conf_path)
         # A config object takes priority over a config file
         elif 'ana_conf' in kwargs:
@@ -49,14 +49,14 @@ def main(*args, **kwargs):
         # == FileHandler ==
         # If a config is not provided, use the default
         if 'fh_conf_path' not in kwargs:
-            fh_conf_path = "../../data/config/cobalt_test.config"
+            fh_conf_path = os.path.join(base_path, "data/config/cobalt_test.config")
         else:
             fh_conf_path = kwargs['fh_conf_path']
         fh = FileHandler.from_config(conf_path=fh_conf_path)
 
         alert = TriggerHandler()
         dh = DataHandler()
-        i3 = Detector('../../data/config/full_dom_table.txt')
+        i3 = Detector(os.path.join(base_path, "data/config/full_dom_table.txt"))
 
         lms.fra_status(status='IN PROCESS', request_id=lms.request_id)
 
