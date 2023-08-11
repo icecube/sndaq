@@ -2,6 +2,7 @@
 """
 import numpy as np
 from abc import ABC, abstractmethod
+from sndaq.logging import logger
 
 
 class _TriggerLevel(ABC):
@@ -37,8 +38,8 @@ class PrimaryTrigger(_TriggerLevel):
 
     @classmethod
     def process(cls, trigger):
-        print('Primary Trigger Processing...')
-        print(trigger)
+        logger.info('Primary Trigger Processing...')
+        logger.info(trigger)
 
 
 # Experimenting with escalating trigger scheme. The idea is you would init the highest matching trigger class, and the
@@ -52,8 +53,8 @@ class BasicTrigger(_TriggerLevel):
 
     @classmethod
     def process(cls, trigger):
-        print('Basic Trigger Processing...')
-        print(' - Would perform muon correction')
+        logger.info('Basic Trigger Processing...')
+        logger.info(' - Would perform muon correction')
 
 
 class SNWGTrigger(_TriggerLevel):
@@ -65,7 +66,7 @@ class SNWGTrigger(_TriggerLevel):
 
     @classmethod
     def process(cls, trigger):
-        print('SN-WG Processing...')
+        logger.info('SN-WG Processing...')
 
 
 class SNEWSTrigger(_TriggerLevel):
@@ -77,7 +78,7 @@ class SNEWSTrigger(_TriggerLevel):
 
     @classmethod
     def process(cls, trigger):
-        print('SNEWS Processing...')
+        logger.info('SNEWS Processing...')
 
 
 class SilverTrigger(_TriggerLevel):
@@ -89,7 +90,7 @@ class SilverTrigger(_TriggerLevel):
 
     @classmethod
     def process(cls, trigger):
-        print('Silver Processing...')
+        logger.info('Silver Processing...')
 
 
 class GoldTrigger(_TriggerLevel):
@@ -101,7 +102,7 @@ class GoldTrigger(_TriggerLevel):
 
     @classmethod
     def process(cls, trigger):
-        print('Gold Processing...')
+        logger.info('Gold Processing...')
 
 
 class TriggerConfig:

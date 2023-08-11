@@ -72,7 +72,7 @@ def main(*args, **kwargs):
         # Main SNDAQ Loop
         dh.get_scaler_files(fh.dir_scaler, start_time, stop_time)
         for file in dh.scaler_files:
-            print(f'Processing {file}')
+            logger.debug(f'Processing {file}')
             dh.set_scaler_file(file)
             # Process file
             # Setup variables from first payload in file
@@ -115,7 +115,6 @@ def main(*args, **kwargs):
                     alert.process_trigger(ana.current_trigger)
                     ana.current_trigger.reset()
                     ana.trigger_count = 0
-                    print('')
 
             # If payload is none, then EOF reached. Close file and move to next one
             dh._scaler_file.close()

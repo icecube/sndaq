@@ -1,21 +1,19 @@
 """Objects and functions for handling and processing raw data used by SNDAQ
 """
+from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
+from sndaq.buffer import stagingbuffer
+from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
+from sndaq.logging import logger
+
 import numpy as np
 import glob
 import os
 import requests
 import json
 from time import sleep
-import logging
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
-
-logger = logging.getLogger('pysndaq')
-
-from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
-from sndaq.buffer import stagingbuffer
-from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
 
 
 class DataHandler:
@@ -115,19 +113,19 @@ class DataHandler:
             }
             sleep(1)  # Required to prevent accidental DDoS
             # TODO: Add this to config
-            logger.info(f"sent runinfo request to live {DATA}")
+            logger.debug(f"sent runinfo request to live {DATA}")
             ssl._create_default_https_context = ssl._create_unverified_context
             response = requests.post(url=f"https://i3live/run_info/", data=DATA, verify=False)
-            logger.info(f"received runinfo from live {response}")
+            logger.debug(f"received runinfo from live {response}")
             data = json.loads(response.text)
-            logger.info(f"Recv Data: {data}")
+            logger.debug(f"Recv Data: {data}")
             run_start = np.datetime64(data['start'])
             file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
             t0 = start_datetime - np.timedelta64(buffer_time_t, 'ms')  # Add a minute to ensure
             t1 = stop_datetime + np.timedelta64(buffer_time_l, 'ms')  # Add a minute to ensure files
             idx_glob = np.where((t0 < file_times) & (file_times < t1))[0]
             self._scaler_file_glob = np.array(self._scaler_file_glob)[idx_glob]
-            logger.info(f"Found files: {self._scaler_file_glob}")
+            logger.debug(f"Found files: {self._scaler_file_glob}")
 
     def get_pdaqtrigger_files(self, directory):
         # TODO: Move to file handler

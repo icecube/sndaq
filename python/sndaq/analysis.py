@@ -5,9 +5,10 @@ from configparser import ConfigParser
 import ast  # TODO: Replace with pyyaml
 from sndaq.buffer import windowbuffer
 from sndaq.trigger import PrimaryTrigger, Trigger
+from sndaq.logging import logger
 
-_ana_conf_repr_string = \
-    """Analysis Configuration
+_ana_conf_repr_string = """
+Analysis Configuration
 ======================
 | 
 | Buffer Configuration
@@ -27,6 +28,7 @@ _ana_conf_repr_string = \
 | Rate: [{min_bkg_rate}, {max_bkg_rate}]
 | Fano Factor: [{min_bkg_fano}, {max_bkg_fano}]
 | Abs. Skew < {max_bkg_abs_skew}
+======================
 """
 
 
@@ -326,6 +328,7 @@ class AnalysisHandler:
         self.triggered_analysis = None
         self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
         self._n_trigger_close = 0
+        logger.debug('Analysis Handler Initialized.')
 
     @property
     def trigger_pending(self):
@@ -661,6 +664,7 @@ class Analysis:
         # Analysis becomes triggerable when trailing background has filled
         self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / config.base_binsize)
         self.n = 0
+        logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
 
     def __repr__(self):
         repr_str = f"SNDAQ Binned Search #{int((self.binsize + self.offset)/self._base_binsize):<2d}: " +\
