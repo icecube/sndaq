@@ -203,6 +203,7 @@ class LiveMessageSender(object):
             pass  # Do something to de-register alert with sender
         else:
             err_state = 0
+        #TODO Change to Info
         self.sender.send_moni(varname='sndaq_fra_status', prio=2, value={'status': status, "request_id": request_id})
         return err_state
 

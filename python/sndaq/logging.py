@@ -1,7 +1,10 @@
 """Module for confiugring PySNDAQ's logging facilities
 """
+from sndaq import base_path
+
 import logging
 from logging.handlers import RotatingFileHandler
+
 import os
 import shutil
 import time

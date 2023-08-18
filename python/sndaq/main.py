@@ -121,7 +121,11 @@ def main(*args, **kwargs):
 
         # TODO Move logger messages into function, main shouldn't be too cluttered
         logger.info(f'FRA Request {lms.request_id} Completed')
-        lms.fra_result(data={'PLACEHOLDER_KEY': 'PLACEHOLDER_VALUE'}, request_id=lms.request_id)
+        result_dict = {'lightcurve': {}}
+        for binsize in ana._binnings:
+            result_dict['lightcurve'].update({str(int(binsize)): {'data': None, 'offset_ms': 0}})
+
+        lms.fra_result(request_id=lms.request_id, data=result_dict)
 
         logger.info(f'Results sent to live ({lms.request_id})')
         lms.fra_status(status='SUCCESS', request_id=lms.request_id)
@@ -142,5 +146,3 @@ def main(*args, **kwargs):
         logger.info('Closing ZMQMoniClient')
         # lms.sender.close()
         logger.info('=== STOP ===')
-
-
