@@ -194,6 +194,7 @@ class LiveMessageSender(object):
             raise ValueError(f"Unknown status {status}, see member `_fra_statuses` for valid values")
         elif status == 'QUEUED':
             err_state = 0
+            self._request_id = request_id
         elif status == 'FAILED':
             err_state = 1
             pass  # Do something to send error alongside status update

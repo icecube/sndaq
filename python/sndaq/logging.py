@@ -1,6 +1,7 @@
 """Module for confiugring PySNDAQ's logging facilities
 """
 import logging
+from logging.handlers import RotatingFileHandler
 import os
 import shutil
 import time
@@ -23,7 +24,7 @@ def _rotator(source, dest):
 
 # Check if logger currently exists, if not, create it
 if _logger_name not in logging.Logger.manager.loggerDict.keys():
-    rh = logging.handlers.RotatingFileHandler(log_file, backupCount=5)
+    rh = RotatingFileHandler(log_file, backupCount=5)
     rh.rotator = _rotator
 
     logger = logging.getLogger(_logger_name)

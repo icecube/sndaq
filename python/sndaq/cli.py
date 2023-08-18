@@ -146,7 +146,7 @@ def _process_json(args):
     # Needs a better name
     fh_conf_path = os.path.join(base_path, 'data/config/default.config')  # May want to have custom config for FRA
 
-    launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path,
+    launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path, request_id=data['request_id'],
                  start_time=data['start_time'], stop_time=data['stop_time'],
                  lightcurve=data['lc_duration'], no_run_mode=False)
     print("queued for processing")

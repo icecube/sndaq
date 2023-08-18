@@ -129,11 +129,11 @@ def main(*args, **kwargs):
 
     except KeyboardInterrupt as e:
         logger.error(str(e))
-        lms.fra_status('ERROR', lms.request_id)
+        lms.fra_status('FAIL', lms.request_id)
         lms.sender.send_moni(varname='sndaq_fra_error', prio=2, value={'request_id': lms.request_id, "value": "Manual Abort"})
     except Exception as e:
         logger.error(exc_string())
-        lms.fra_status('ERROR', lms.request_id)
+        lms.fra_status('FAIL', lms.request_id)
         lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={"request_id": lms.request_id, "err_msg": exc_string()})
         #lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={"request_id": lms.request_id, "err_msg": str(e)})
     finally:
