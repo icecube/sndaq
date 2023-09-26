@@ -73,7 +73,7 @@ class DataHandler:
 
     def get_run_no(self):
         # TODO: IMPORTANT!!! DO NOT HARD CODE THIS
-        return 260594
+        return 267395 
 
     def get_scaler_files(self, directory, start_time=None, stop_time=None, buffer_time_l=None, buffer_time_t=None):
         # TODO: Move to file handler
@@ -92,8 +92,9 @@ class DataHandler:
         buffer_time_t : int
             Amount of time for trailing buffer in ms
         """
-        self._scaler_file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat'))))  # May need to check sorting order
-
+        self._scaler_file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat.processed'))))  # May need to check sorting order
+        logger.debug(f"Searching for files matching pattern {'/'.join((directory, 'sn*.dat.processed'))}")
+        logger.debug(f"start_time={start_time} stop_time={stop_time}")
         if start_time:
             start_datetime = np.datetime64(start_time)
             if stop_time:
@@ -102,7 +103,7 @@ class DataHandler:
                 stop_datetime = start_datetime
 
             # Estimate scaler file times
-            idc = np.array([os.path.basename(file).split('_')[2] for file in self._scaler_file_glob])
+            idc = np.array([int(os.path.basename(file).split('_')[2]) for file in self._scaler_file_glob])
 
             # TODO Figure out a better way of getting run start time
             run_no = self.get_run_no()
@@ -123,8 +124,12 @@ class DataHandler:
             file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
             t0 = start_datetime - np.timedelta64(buffer_time_t, 'ms')  # Add a minute to ensure
             t1 = stop_datetime + np.timedelta64(buffer_time_l, 'ms')  # Add a minute to ensure files
+            logger.debug(f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
+            logger.debug(f"Searching between times {t0} {t1} , found file times {file_times}")
             idx_glob = np.where((t0 < file_times) & (file_times < t1))[0]
             self._scaler_file_glob = np.array(self._scaler_file_glob)[idx_glob]
+            if len(self._scaler_file_glob) == 0:
+                raise Exception("No Scaler files found!")
             logger.debug(f"Found files: {self._scaler_file_glob}")
 
     def get_pdaqtrigger_files(self, directory):

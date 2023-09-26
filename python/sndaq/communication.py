@@ -155,7 +155,7 @@ class LiveMessageSender(object):
     instance = None
     _fra_statuses = ['QUEUED', 'IN PROGRESS', 'SUCCESS', 'FAIL']
 
-    def __new__(cls, moni_host=None, moni_port=None):
+    def __new__(cls, moni_host=None, moni_port=None, msg=None):
         """
 
         Parameters
@@ -169,6 +169,7 @@ class LiveMessageSender(object):
             cls.instance = super(LiveMessageSender, cls).__new__(cls)
             cls.instance.sender = ZMQMoniClient(svc='sndaq_fra', moni_host=moni_host, moni_port=moni_port)
             cls.instance._request_id = None
+            cls.msg = msg
         return cls.instance
 
     @property
@@ -204,7 +205,8 @@ class LiveMessageSender(object):
         else:
             err_state = 0
         #TODO Change to Info
-        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value={'status': status, "request_id": request_id})
+        self.msg.update({'status': status, "request_id": request_id})
+        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value=self.msg)
         return err_state
 
     def fra_result(self, data, request_id):
@@ -221,4 +223,5 @@ class LiveMessageSender(object):
         -------
 
         """
-        self.sender.send_moni(varname='sndaq_fra_result', prio=2, value={"data": data, "request_id": request_id})
+        self.msg.update({"data": data, "request_id": request_id})
+        self.sender.send_moni(varname='sndaq_fra_result', prio=2, value=self.msg)

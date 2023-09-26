@@ -27,7 +27,7 @@ def launch(*args, **kwargs):
 def main(*args, **kwargs):
     # TODO: Cleanup from spts-test
     logger.info(f"Creating LiveMessageSender sending to expcont:6668")
-    lms = LiveMessageSender(moni_host='expcont', moni_port=6668)
+    lms = LiveMessageSender(moni_host='expcont', moni_port=6668, msg = kwargs['msg'])
 
     request_id = get_unique_id() if 'request_id' not in kwargs else kwargs['request_id']
     logger.debug(f"Registered FRA request: {request_id}")
@@ -70,7 +70,8 @@ def main(*args, **kwargs):
         stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
 
         # Main SNDAQ Loop
-        dh.get_scaler_files(fh.dir_scaler, start_time, stop_time)
+        # TODO: Don't forget to fix this!
+        dh.get_scaler_files(fh.dir_scaler_bkp, start_time, stop_time, ana_config.duration_bgl_ms, ana_config.duration_bgt_ms)
         for file in dh.scaler_files:
             logger.debug(f'Processing {file}')
             dh.set_scaler_file(file)
@@ -134,7 +135,7 @@ def main(*args, **kwargs):
     except KeyboardInterrupt as e:
         logger.error(str(e))
         lms.fra_status('FAIL', lms.request_id)
-        lms.sender.send_moni(varname='sndaq_fra_error', prio=2, value={'request_id': lms.request_id, "value": "Manual Abort"})
+        lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={'request_id': lms.request_id, "value": "Manual Abort"})
     except Exception as e:
         logger.error(exc_string())
         lms.fra_status('FAIL', lms.request_id)
