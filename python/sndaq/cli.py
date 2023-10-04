@@ -4,7 +4,6 @@ import argparse
 import sys
 import json
 import os
-import subprocess
 
 from sndaq.analysis import AnalysisConfig
 from sndaq.main import launch as launch_sndaq
@@ -94,8 +93,9 @@ def _setup_process_parser(subparsers):
     parser.add_argument('--conf', metavar='CONFIG_FILE', default=None,
                         help='Config. file for additional options')
 
+
 def _setup_process_json_parser(subparsers):
-    """Setup SNDAQ `processjson` command parser
+    """Setup SNDAQ `process-json` command parser
 
     Parameters
     ----------
@@ -117,23 +117,35 @@ def _process_json(args):
     ----------
     args : Namespace
         list of arguments produced by argparse
+
+    Notes
+    -----
+    The following may be used to dump the contents of a json file:
+        `sndaq process-json "$(<path/to/somefile.json)"`
     """
     data_json = args.json
     data = json.loads(data_json.replace("'", '"'))
 
-    if data['fr_type'] == 'CCSN':
+    if data['fr_type'].lower() == 'ccsn':
+        logger.debug("Using default ccsn request config")
         ana_conf_path = os.path.join(base_path, 'data/config/ccsn_fra.config')
-    elif data['fr_type'] == 'Merger':
+    elif data['fr_type'].lower() == 'merger':
+        logger.debug("Using default merger request config")
         ana_conf_path = os.path.join(base_path, 'data/config/merger_fra.config')
     else:
+        logger.warning(f"Unknown configuration '{data['fr_type']}' requested")
         ana_conf_path = os.path.join(base_path, 'data/config/analysis.config')
 
     if not os.path.exists(ana_conf_path):
-        raise FileNotFoundError("Analysis Config `{}` not found")
+        msg = f"Analysis Config `{ana_conf_path}` not found"
+        logger.error(msg)
+        raise FileNotFoundError(msg)
 
     ana_conf = AnalysisConfig.from_config(conf_path=ana_conf_path)
     if not ana_conf:
-        raise ValueError("Analysis Config {} is blank")
+        msg = f"Analysis Config `{ana_conf_path}` is blank"
+        logger.error(msg)
+        raise ValueError(msg)
 
     # TODO: Request mfrere that live provide args using SNDAQ config keys
     ana_conf.use_offsets = data['offset_search']
@@ -149,7 +161,7 @@ def _process_json(args):
     launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path, request_id=data['request_id'],
                  start_time=data['start_time'], stop_time=data['stop_time'],
                  lightcurve=data['lc_duration'], msg=data, no_run_mode=False)
-    print("queued for processing")
+    logger.info("queued for processing")
 
 
 def main():
@@ -186,11 +198,21 @@ def main():
 
     args = parser.parse_args()
 
+    #TODO: Figure out how to prevent instancing logger upon calls to help from cli or invalid commands
+    # I think this can be done by importing conditionally.
     if args.command == 'stop':
-        print('SNDAQ Stopped!')
+        logger.info('SNDAQ Stopped!')
     elif args.command == 'process-json':
         logger.debug(f'Received `process-json` Command with args: {args}"')
         _process_json(args)
+    elif args.command == 'process':
+        msg = f"Command `{args.command}` not implemented"
+        logger.error(msg)
+        raise NotImplementedError()
+    else:
+        msg = f"Unknown Command: `{args.command}`"
+        logger.error(msg)
+        raise RuntimeError(msg)
 
 
 if __name__ == "__main__":
