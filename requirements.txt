@@ -3,6 +3,8 @@ scipy
 astropy
 setuptools
 fabric
+requests
+fabric
 matplotlib[offline]
 uproot[offline, develop]
 pyyaml[develop]
