@@ -17,7 +17,26 @@ def help(ctx):
     print("Installer help message")
 
 
-def git_clone_pysndaq(ctx, target, istag, src_path, githost):
+def git_clone_pysndaq(ctx, version, istag, src_path, githost):
+    """Perform Git Clone of PySNDAQ repo
+    TODO: See if `git archive` can perform this function with lesser bandwidth usage
+
+    Parameters
+    ----------
+    ctx :
+        Context in which to execute commands
+    version : str
+        Tag or branchname of PySNDAQ version to clone (e.g. "Prometheus" or "branches/main")
+    istag : bool
+        Indicates if version is a release Tag
+    src_path : str or PathLike
+        Path to directory that PySNDAQ will be cloned into
+    githost :
+        Address from which to clone
+    Returns
+    -------
+
+    """
     # Check if the source path already exists
     if not os.path.isdir(src_path):
         logger.debug(f"Creating directory {src_path} for initial git Clone")
@@ -37,32 +56,47 @@ def git_clone_pysndaq(ctx, target, istag, src_path, githost):
 
         # Fetch the target using a release tag
         if istag:
-            ctx.run(f"git fetch --depth 1 origin tag {target}")
-            ctx.run(f"git checkout {target}")
+            ctx.run(f"git fetch --depth 1 origin tag {version}")
+            ctx.run(f"git checkout {version}")
 
         # Fetch the target using a banch
         else:
             # Ensure the branch exists locally
-            response = ctx.run(f"git rev-parse --verify {target}", warn=True)
+            response = ctx.run(f"git rev-parse --verify {version}", warn=True)
 
             # If the branch doesn't exist locally, fetch it from the remote
             if response.failed:
                 # Add branch to tracked remotes (Initial clone above is shallow)
-                ctx.run(f"git remote set-branches origin {target}", warn=True)
+                ctx.run(f"git remote set-branches origin {version}", warn=True)
 
                 # Fetch last change to branch (reduces data transfer for low latency system)
-                ctx.run(f"git fetch --depth 1 origin {target}", warn=True)
+                ctx.run(f"git fetch --depth 1 origin {version}", warn=True)
 
                 # Switch to new branch
-                ctx.run(f"git checkout --track origin/{target}", warn=True)
+                ctx.run(f"git checkout --track origin/{version}", warn=True)
 
             # If the branch does exist locally, check it out and update it
             else:
-                ctx.run(f"git checkout {target}", warn=True)
+                ctx.run(f"git checkout {version}", warn=True)
                 ctx.run("git pull --ff-only", warn=True)
 
 
 def parse_git_version(version):
+    """Parse a GitHub branch or tag name to construct a version name
+
+    Parameters
+    ----------
+    version : str
+        GitHub branch or tag name
+    Returns
+    -------
+    sndaq_version : str
+        SNDAQ branch or tag name
+    sndaq_revision : str
+        SNDAQ branch or tag revision (TODO: Decide if this is defunct)
+    istag : bool
+        Indicates whether version is a tag
+    """
     if version.startswith("branches/"):
         sndaq_version = str.replace(version, "/", "-", 1)
         istag = False
@@ -74,6 +108,18 @@ def parse_git_version(version):
 
 
 def confirm(question):
+    """Provide User a 5-attempt confirmation prompt. If no answer is provided, No/False is assumed
+
+    Parameters
+    ----------
+    question : str
+        Message expressing a yes or no question to which the user must reply before proceeding
+    Returns
+    -------
+    should_proceed : bool
+        Indicates whether the user has requested to proceed or halt execution (TODO: Halt execution here?)
+
+    """
     resp_yes = ['y', 'yes']
     resp_no = ['n', 'no']
     print(question)
@@ -95,6 +141,18 @@ def confirm(question):
 
 @task
 def stage(ctx, target='branches/main', stage_path=None):
+    """Stage an installation of SNDAQ and prepare it for deployment
+
+    Parameters
+    ----------
+    ctx :
+    target :
+    stage_path :
+
+    Returns
+    -------
+
+    """
     ctx.config.run.replace_env = False  # Keep shell env
 
     # Check that the git working area already exists locally
@@ -163,6 +221,22 @@ def stage(ctx, target='branches/main', stage_path=None):
 
 @task
 def deploy(ctx, stage_path, deploy_target, deploy_path, control_target, control_path):
+    """Deploy an installation of PySNDAQ and its components to at deployment target (where it will run)
+     and a control target (from which PySNDAQ will be controlled)
+
+    Parameters
+    ----------
+    ctx :
+    stage_path :
+    deploy_target :
+    deploy_path :
+    control_target :
+    control_path :
+
+    Returns
+    -------
+
+    """
     host = ctx.run("hostname -f").stdout
     user = ctx.run("whoami").stdout
 
