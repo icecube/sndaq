@@ -5,6 +5,8 @@ setuptools
 fabric
 requests
 fabric
+patchwork
+invoke
 pybind11
 matplotlib[offline]
 uproot[offline, develop]
