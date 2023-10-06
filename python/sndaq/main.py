@@ -70,6 +70,10 @@ def main(*args, **kwargs):
         start_time = kwargs['start_time'] if 'start_time' in kwargs else None
         stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
 
+        # TODO Figure out a better way of handling this for FR
+        result_dict = {'xi': {},
+                       'lightcurve': {}}
+
         # Main SNDAQ Loop
         # TODO: Don't forget to fix this!
         dh.get_scaler_files(fh.dir_scaler_bkp, start_time, stop_time, ana_config.duration_bgl_ms, ana_config.duration_bgt_ms)
@@ -86,9 +90,12 @@ def main(*args, **kwargs):
             dh._file_start_utime = utime
             if dh._start_utime is None and utime is not None:
                 dh._start_utime = utime
+                ana._starttime = utime
                 dh._raw_utime = np.arange(utime, utime + (dh._raw_udt * dh._staging_depth), dh._raw_udt)
 
-            while dh.payload is not None:
+            stop_utime = stop_time.astype('datetime64[ns]') - np.datetime64(f'{stop_time.item().year}', 'Y')
+
+            while dh.payload is not None and ana.trigger_time() < stop_utime:
 
                 # Add to the current 2ms bin until it has filled...
                 while dh.payload is not None and dh.payload.utime <= dh._raw_utime[1]:
@@ -111,6 +118,18 @@ def main(*args, **kwargs):
                     ana.update(dh._data.front)
                     dh.advance_buffer()
 
+                    for sub_ana in ana.analyses:
+                        if not sub_ana.is_triggerable:
+                            continue
+
+                        if ana.trigger_time(sub_ana) >= stop_time:
+                            key = str(int(sub_ana.binsize))
+                            if key in result_dict['xi'] and sub_ana.xi <= result_dict['xi'][key]:
+                                continue
+                            result_dict['xi'].update({key: {sub_ana.xi}})
+                            result_dict['lightcurve'].update({key: {'data': ana.get_lightcurve(sub_ana,
+                                                                                               kwargs['lc_duration'][0], kwargs['lc_duration'][1]), 'offset_ms': 0}})
+
                 # If a trigger has been finalized, process it.
                 if ana.trigger_finalized:
                     ana.cand_count += 1
@@ -123,7 +142,6 @@ def main(*args, **kwargs):
 
         # TODO Move logger messages into function, main shouldn't be too cluttered
         logger.info(f'FRA Request {lms.request_id} Completed')
-        result_dict = {'lightcurve': {}}
         for binsize in ana._binnings:
             result_dict['lightcurve'].update({str(int(binsize)): {'data': None, 'offset_ms': 0}})
 
