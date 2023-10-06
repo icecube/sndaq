@@ -12,10 +12,10 @@ import shutil
 
 from sndaq import base_path
 
-log_path = os.path.join(base_path, 'log')
-log_file = os.path.join(log_path, 'pysndaq.log')
-log_level = logging.DEBUG  # TODO: Set this up with config, and add option to disable logging
-_logger_name = 'pysndaq'
+_default_log_path = os.path.join(base_path, 'log')
+_default_log_file = os.path.join(_default_log_path, 'pysndaq.log')
+_default_log_level = logging.DEBUG  # TODO: Set this up with config, and add option to disable logging
+_default_logger_name = 'pysndaq'
 
 
 def _mod_func_filter(record):
@@ -49,6 +49,7 @@ def _mod_func_filter(record):
     record.msg = f"{mod_func_str:>18s} | {record.msg}"
     return record
 
+
 def _loglevel_fmt_filter(record):
     """Custom Filter function which formats the log-level name of log records.
     Parameters
@@ -70,25 +71,48 @@ def _rotator(source, dest):
     os.remove(source)
 
 
-# Check if logger currently exists, if not, create it
-if _logger_name not in logging.Logger.manager.loggerDict.keys():
-    handler = RotatingFileHandler(log_file, backupCount=3)
-    handler.rotator = _rotator
-    formatter = logging.Formatter('%(asctime)s.%(msecs)03d %(levelname)s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S')
-    handler.setFormatter(formatter)
-    handler.addFilter(_mod_func_filter)
-    handler.addFilter(_loglevel_fmt_filter)
+def get_logger(name=_default_logger_name, log_path=_default_log_path, log_level=_default_log_level):
+    """Get SNDAQ-style Logger singleton. If none exist, create a new one.
+    Every time a new logger is created, the old logfile is rolled over.
 
-    logger = logging.getLogger(_logger_name)
-    logger.setLevel(log_level)
-    logger.addHandler(handler)
+    Parameters
+    ----------
+    name : str
+        logger name (also sets logfile name)
+    log_path : str or PathLike
 
-    # If a previous log file is found, rollover to a new file
-    if os.path.isfile(log_file):
-        logger.debug(f'Log File has been closed')
-        logger.handlers[0].doRollover()
+    log_level : int
+        Python Logging level e.g. logging.debug (10), logging.error (40)
 
-else:
-    logger = logging.getLogger(_logger_name)
+    Returns
+    -------
+    logger : logging.Logger
+        Python Logger configured with PySNDAQ format and style.
+    """
+
+    log_file = os.path.join(log_path, f'{name}.log')
+
+    # Check if logger currently exists, if not, create it
+    if name not in logging.Logger.manager.loggerDict.keys():
+        handler = RotatingFileHandler(log_file, backupCount=3)
+        handler.rotator = _rotator
+        formatter = logging.Formatter('%(asctime)s.%(msecs)03d %(levelname)s %(message)s', datefmt='%Y-%m-%dT%H:%M:%S')
+        handler.setFormatter(formatter)
+        handler.addFilter(_mod_func_filter)
+        handler.addFilter(_loglevel_fmt_filter)
+
+        logger = logging.getLogger(name)
+        logger.setLevel(log_level)
+        logger.addHandler(handler)
+
+        # If a previous log file is found, rollover to a new file
+        if os.path.isfile(log_file):
+            logger.debug(f'Log File has been closed')
+            logger.handlers[0].doRollover()
+
+    else:
+        logger = logging.getLogger(name)
+
+    return logger
 
 

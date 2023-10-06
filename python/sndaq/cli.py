@@ -8,11 +8,12 @@ import os
 from sndaq.analysis import AnalysisConfig
 from sndaq.main import launch as launch_sndaq
 from sndaq import base_path
-from sndaq.logging import logger
+from sndaq.logging import get_logger
 
 _no_arg_commands = []
 _command_parsers = {}
 
+logger = get_logger()
 
 class _CustomUsageFormatter(argparse.HelpFormatter):
     """Custom formatter to clarify SNDAQ command usage

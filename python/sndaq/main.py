@@ -14,8 +14,9 @@ from sndaq import base_path
 from multiprocessing import Process
 import os
 
-from sndaq.logging import logger
+from sndaq.logging import get_logger
 
+logger = get_logger()
 
 def launch(*args, **kwargs):
     logger.debug(f"Launching SNDAQ with the following Configuration:\nargs:{args}\nkwargs:{kwargs}")

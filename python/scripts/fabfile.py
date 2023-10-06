@@ -5,7 +5,9 @@ from invoke import Exit
 from configparser import ConfigParser
 import os
 
-from sndaq.logging import logger
+from sndaq.logging import get_logger
+
+logger = get_logger(name='pysndaq_fabric', log_path=os.path.split(__file__)[0])
 
 _config = ConfigParser()
 _config.read('fabfile.cfg')
@@ -13,6 +15,7 @@ _config.read('fabfile.cfg')
 @task
 def help(ctx):
     print("Installer help message")
+
 
 def git_clone_pysndaq(ctx, target, istag, src_path, githost):
     # Check if the source path already exists

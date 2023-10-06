@@ -5,7 +5,9 @@ from configparser import ConfigParser
 import ast  # TODO: Replace with pyyaml
 from sndaq.buffer import windowbuffer
 from sndaq.trigger import PrimaryTrigger, Trigger
-from sndaq.logging import logger
+from sndaq.logging import get_logger
+
+logger = get_logger()
 
 _ana_conf_repr_string = """
 Analysis Configuration

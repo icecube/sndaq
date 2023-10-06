@@ -2,7 +2,9 @@
 """
 import numpy as np
 from abc import ABC, abstractmethod
-from sndaq.logging import logger
+from sndaq.logging import get_logger
+
+logger = get_logger()
 
 
 class _TriggerLevel(ABC):

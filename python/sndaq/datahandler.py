@@ -3,7 +3,7 @@
 from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
 from sndaq.buffer import stagingbuffer
 from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
-from sndaq.logging import logger
+from sndaq.logging import get_logger
 
 import numpy as np
 import glob
@@ -15,6 +15,7 @@ from time import sleep
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
+logger = get_logger()
 
 class DataHandler:
     """Handler for SN scaler data files
@@ -75,7 +76,8 @@ class DataHandler:
         # TODO: IMPORTANT!!! DO NOT HARD CODE THIS
         return 267395 
 
-    def get_scaler_files(self, directory, start_time=None, stop_time=None, buffer_time_l=None, buffer_time_t=None):
+    def get_scaler_files(self, directory, start_time=None, stop_time=None, buffer_time_l=None, buffer_time_t=None,
+                         scaler_file_pattern='sn*.dat.processed'):
         # TODO: Move to file handler
         """Get SN scaler files from a directory
 
@@ -92,8 +94,8 @@ class DataHandler:
         buffer_time_t : int
             Amount of time for trailing buffer in ms
         """
-        self._scaler_file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat.processed'))))  # May need to check sorting order
-        logger.debug(f"Searching for files matching pattern {'/'.join((directory, 'sn*.dat.processed'))}")
+        self._scaler_file_glob = sorted(glob.glob('/'.join((directory, scaler_file_pattern))))  # May need to check sorting order
+        logger.debug(f"Searching for files matching pattern {'/'.join((directory, scaler_file_pattern))}")
         logger.debug(f"start_time={start_time} stop_time={stop_time}")
         if start_time:
             start_datetime = np.datetime64(start_time)
