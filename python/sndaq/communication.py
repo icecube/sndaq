@@ -9,6 +9,8 @@ import numpy as np
 import datetime
 import time
 
+from sndaq import get_i3creds
+
 try:
     from livecore.util.misc import unique_id, zmq_ctx
     from livecore.messaging import zmqtransport as zt
@@ -24,9 +26,12 @@ except ImportError as e:
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
+
+_i3user, _i3pass = get_i3creds()
+
 _default_query_params = {
-            'user': 'REDACTED',
-            'pass': 'REDACTED'
+            'user': _i3user,
+            'pass': _i3pass
         }
 
 def get_unique_id():

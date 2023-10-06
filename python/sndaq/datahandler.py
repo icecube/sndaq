@@ -4,6 +4,9 @@ from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
 from sndaq.buffer import stagingbuffer
 from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
 from sndaq.logging import get_logger
+from sndaq.communication import RunInfoAgent
+
+from sndaq import get_i3creds
 
 import numpy as np
 import glob
@@ -16,6 +19,8 @@ import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
 
 logger = get_logger()
+_i3user, _i3pass = get_i3creds()
+
 
 class DataHandler:
     """Handler for SN scaler data files
@@ -49,6 +54,8 @@ class DataHandler:
 
         self._pdaqtrigger_file = None
         self._pdaqtrigger_file_glob = None
+
+        self._run_info_agent = RunInfoAgent('i3live')
 
     @property
     def scaler_files(self):
