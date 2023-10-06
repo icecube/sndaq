@@ -5,6 +5,7 @@ setuptools
 fabric
 requests
 fabric
+pybind11
 matplotlib[offline]
 uproot[offline, develop]
 pyyaml[develop]
