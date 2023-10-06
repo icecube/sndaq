@@ -61,6 +61,7 @@ def git_clone_pysndaq(ctx, target, istag, src_path, githost):
                 ctx.run(f"git checkout {target}", warn=True)
                 ctx.run("git pull --ff-only", warn=True)
 
+
 def parse_git_version(version):
     if version.startswith("branches/"):
         sndaq_version = str.replace(version, "/", "-", 1)
@@ -70,6 +71,7 @@ def parse_git_version(version):
         istag = True
     sndaq_revision = "latest"
     return sndaq_version, sndaq_revision, istag
+
 
 def confirm(question):
     resp_yes = ['y', 'yes']
