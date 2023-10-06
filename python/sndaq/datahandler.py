@@ -11,9 +11,6 @@ from sndaq import get_i3creds
 import numpy as np
 import glob
 import os
-import requests
-import json
-from time import sleep
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
