@@ -332,6 +332,48 @@ class AnalysisHandler:
         self._n_trigger_close = 0
         logger.debug('Analysis Handler Initialized.')
 
+    def get_lightcurve(self, ana, dur_lct, dur_lcl):
+        """Export lightcurve from data buffer
+
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+            SNDAQ Analysis object, contains relevant indices and meta data
+        dur_lct : int
+            Duration of trailing lightcurve in ms (Time after t0=0)
+        dur_lcl : int
+            Duration of leading lightcurve in ms (Time before t0=0)
+
+        Returns
+        -------
+        lightcurve : np.ndarray of int
+            Binned SN hits in requested binning, spanning [t0-dur_lct, t0+dur_lcl]
+            Note: The first bin may be a partial bin, depending on the modulus between the total lightcurve duration
+            and the requested binning.
+        """
+        # Pre-allocate
+        mod_lct = dur_lct % ana.binsize
+        nbins_lct = int(dur_lct // ana.binsize + int(bool(mod_lct)))
+        mod_lcl = dur_lct % ana.binsize
+        nbins_lcl = int(dur_lcl // ana.binsize + int(bool(mod_lcl)))
+        lightcurve = np.zeros(shape=(nbins_lct + nbins_lcl, self.ndom))
+
+        nbins_rawt = int(dur_lct // self.config.base_binsize)  # Guaranteed to have no modulus
+        nbins_rawl = int(dur_lcl // self.config.base_binsize)
+
+        rebin_factor = int(ana.binsize // self.config.base_binsize)
+        nbins_shift = int(mod_lcl / self.config.base_binsize )
+        # TODO: Add to error checking that lc duration is multiple of min binsize
+        idx = (np.arange(nbins_rawt+nbins_rawl)+nbins_shift) // rebin_factor
+
+        # Performs rebinning automatically
+        np.add.at(lightcurve, (idx, np.arange(self.ndom)),
+                  self.buffer_analysis[ana.idx_sw-nbins_rawl:ana.idx_sw+nbins_rawt, :])
+
+        return lightcurve
+
+
+
     @property
     def trigger_pending(self):
         """Boolean indicating whether a trigger candidate is currently pending. SNDAQ will check for higher triggers for
@@ -361,6 +403,25 @@ class AnalysisHandler:
         """Timestamp of data entering the analysis buffer
         """
         return self._starttime + self.buffer_analysis.n * self.config.base_binsize / 1e3
+
+    def trigger_time(self, ana=None):
+        """
+
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+
+        Returns
+        -------
+
+        """
+        if ana is None:
+            ana = self.analyses[-1]
+
+        if ana.is_online:
+            return self.current_time - ((ana.idx_eod - ana.idx_sw) * self.config.base_binsize / 1e3)
+        else:
+            return -np.inf
 
     @property
     def eps(self):
