@@ -118,23 +118,27 @@ def main(*args, **kwargs):
                     ana.update(dh._data.front)
                     dh.advance_buffer()
 
-                    for sub_ana in ana.analyses:
-                        if not sub_ana.is_triggerable:
-                            continue
-
-                        if ana.trigger_time(sub_ana) >= stop_time:
-                            key = str(int(sub_ana.binsize))
-                            if key in result_dict['xi'] and sub_ana.xi <= result_dict['xi'][key]:
-                                continue
-                            result_dict['xi'].update({key: {sub_ana.xi}})
-                            result_dict['lightcurve'].update({key: {'data': ana.get_lightcurve(sub_ana,
-                                                                                               kwargs['lc_duration'][0], kwargs['lc_duration'][1]), 'offset_ms': 0}})
-
                 # If a trigger has been finalized, process it.
                 if ana.trigger_finalized:
-                    ana.cand_count += 1
-                    alert.process_trigger(ana.current_trigger)
-                    ana.current_trigger.reset()
+                    ana.cand_count += len(ana.candidates)
+                    for cand in ana.candidates:
+                        alert.process_cand(cand)
+                        binsize = int(ana.config.binsize_ms)
+                        # update if any of the following conditoions are met:
+                        # 1 - Result dict is empty of lightcurves
+                        # 2 - Result Dict has a lightcurve, but in a different binning
+                        # 3 - The current candidate has a higher TS in a seach with the same binsize
+                        if (not result_dict['lightcurve'] or
+                            not result_dict['lightcurve'][str(binsize)] or
+                                result_dict['lightcurve'][str(binsize)]['xi'] < cand.xi):
+                            result_dict['lightcurve'].update({
+                                str(int(ana.config.binsize_ms)):
+                                    {'data': ana.get_lightcurve(cand.ana,
+                                                                int(kwargs['duration_pre_trigger']),
+                                                                int(kwargs['duration_post_trigger'])),
+                                     'offset_ms': int(kwargs['duration_pre_trigger'] % ana.config.binsize_ms)}
+                            })
+                    ana.candidates = []
                     ana.trigger_count = 0
 
             # If payload is none, then EOF reached. Close file and move to next one
