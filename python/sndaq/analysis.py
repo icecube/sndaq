@@ -599,7 +599,7 @@ class AnalysisHandler:
         # Decide what to do with them, Escalating triggers must be handled differently from Fast Response Triggers
         if potential_analyses:
             # Detect Escalating trigger
-            if isinstance(self.config.trigger_condition, PrimaryTrigger):
+            if isinstance(self.config.trigger_condition, FastResponseTrigger):
                 xi = np.array([ana.xi for (_, ana) in potential_analyses])
                 xi_max = xi.max(initial=0.0)
 
