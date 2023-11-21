@@ -201,7 +201,7 @@ class LiveMessageSender(object):
         elif status == 'QUEUED':
             err_state = 0
             self._request_id = request_id
-        elif status == 'FAILED':
+        elif status == 'FAIL':
             err_state = 1
             pass  # Do something to send error alongside status update
         elif status == 'SUCCESS':
@@ -211,7 +211,7 @@ class LiveMessageSender(object):
             err_state = 0
         #TODO Change to Info
         self.msg.update({'status': status, "request_id": request_id})
-        self.sender.send_moni(varname='sndaq_fra_status', prio=2, value=self.msg)
+        self.sender.send_moni(varname='sndaq_fra_info', prio=2, value=self.msg)
         return err_state
 
     def fra_result(self, data, request_id):
@@ -229,4 +229,4 @@ class LiveMessageSender(object):
 
         """
         self.msg.update({"data": data, "request_id": request_id})
-        self.sender.send_moni(varname='sndaq_fra_result', prio=2, value=self.msg)
+        self.sender.send_moni(varname='sndaq_fra_info', prio=2, value=self.msg)
