@@ -4,10 +4,13 @@ import numpy as np
 from configparser import ConfigParser
 import ast  # TODO: Replace with pyyaml
 from sndaq.buffer import windowbuffer
-from sndaq.trigger import PrimaryTrigger, Trigger
+from sndaq.trigger import PrimaryTrigger, Trigger, FastResponseTrigger
+from sndaq.logging import get_logger
+from sndaq.util import datetime64_to_utime, utime_to_datetime64
 
-_ana_conf_repr_string = \
-    """Analysis Configuration
+logger = get_logger()
+
+_ana_conf_repr_string = """Analysis Configuration
 ======================
 | 
 | Buffer Configuration
@@ -27,6 +30,7 @@ _ana_conf_repr_string = \
 | Rate: [{min_bkg_rate}, {max_bkg_rate}]
 | Fano Factor: [{min_bkg_fano}, {max_bkg_fano}]
 | Abs. Skew < {max_bkg_abs_skew}
+======================
 """
 
 
@@ -38,7 +42,7 @@ class AnalysisConfig:
     _raw_binsize = 2  # ms
     _dur_signi_buffer = int(600e3)  # ms (10 min)
     _dur_trigger_window = int(30e3)
-    _trigger_level = PrimaryTrigger
+    _trigger_condition = PrimaryTrigger
 
     # _trigger_level.threshold = 5.8
 
@@ -232,10 +236,10 @@ class AnalysisConfig:
         return self._dur_signi_buffer
 
     @property
-    def trigger_level(self):
-        """Primary Trigger level, the threshold at which a trigger escalates into a candidate
+    def trigger_condition(self):
+        """Primary Trigger condition, the threshold at which a trigger escalates into a candidate
         """
-        return self._trigger_level
+        return self._trigger_condition
 
 
 class AnalysisHandler:
@@ -265,7 +269,7 @@ class AnalysisHandler:
     """
 
     def __init__(self, config, ndom=5160, eps=None, dtype=np.uint16,
-                 starttime=0, dropped_doms=None):
+                 start_time=np.datetime64('now'), dropped_doms=None):
         """Create Analysis Handler
 
         Parameters
@@ -289,7 +293,7 @@ class AnalysisHandler:
         else:
             self._eps = eps
         self._dtype = dtype
-        self._starttime = starttime
+        self._start_time = datetime64_to_utime(start_time)
 
         if dropped_doms is not None:
             self._eps = np.delete(self._eps, dropped_doms, axis=0)
@@ -309,23 +313,66 @@ class AnalysisHandler:
         # Create analyses
         self.analyses = []
         for binning in np.asarray(self._binnings, dtype=dtype):
-            for offset in np.arange(0, binning, 500, dtype=dtype):
+            for offset in np.arange(0, binning, 500, dtype=dtype):  # TODO: Increment by binsize not 500
                 idx = int(self._size - (config.duration_nosearch + offset + binning) / config.base_binsize)
                 self.analyses.append(
-                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom)
+                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=start_time)
                 )
 
         # Define counter for accumulation used in rebinning from raw to base analysis
         self._accum_count = self._rebin_factor
         self._accum_data = np.zeros(ndom, dtype=dtype)
 
-        self.current_trigger = Trigger()
+        self.candidates = []
         self.trigger_count = 0
         self.cand_count = 0
         self.trigger_xi = 0.
         self.triggered_analysis = None
         self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
         self._n_trigger_close = 0
+        logger.debug('Analysis Handler Initialized.')
+
+    def get_lightcurve(self, ana, dur_lct, dur_lcl):
+        """Export lightcurve from data buffer
+
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+            SNDAQ Analysis object, contains relevant indices and meta data
+        dur_lct : int
+            Duration of trailing lightcurve in ms (Time after t0=0)
+        dur_lcl : int
+            Duration of leading lightcurve in ms (Time before t0=0)
+
+        Returns
+        -------
+        lightcurve : np.ndarray of int
+            Binned SN hits in requested binning, spanning [t0-dur_lct, t0+dur_lcl]
+            Note: The first bin may be a partial bin, depending on the modulus between the total lightcurve duration
+            and the requested binning.
+        """
+        # Pre-allocate
+        mod_lct = dur_lct % ana.binsize
+        nbins_lct = int(dur_lct // ana.binsize + int(bool(mod_lct)))
+        mod_lcl = dur_lct % ana.binsize
+        nbins_lcl = int(dur_lcl // ana.binsize + int(bool(mod_lcl)))
+        lightcurve = np.zeros(shape=(nbins_lct + nbins_lcl, self.ndom))
+
+        nbins_rawt = int(dur_lct // self.config.base_binsize)  # Guaranteed to have no modulus
+        nbins_rawl = int(dur_lcl // self.config.base_binsize)
+
+        rebin_factor = int(ana.binsize // self.config.base_binsize)
+        nbins_shift = int(mod_lcl / self.config.base_binsize )
+        # TODO: Add to error checking that lc duration is multiple of min binsize
+        idx = (np.arange(nbins_rawt+nbins_rawl)+nbins_shift) // rebin_factor
+
+        # Performs rebinning automatically
+        np.add.at(lightcurve, (idx, np.arange(self.ndom)),
+                  self.buffer_analysis[ana.idx_sw-nbins_rawl:ana.idx_sw+nbins_rawt, :])
+
+        return lightcurve
+
+
 
     @property
     def trigger_pending(self):
@@ -343,6 +390,7 @@ class AnalysisHandler:
         of higher significance, a "closed" window refer to the state where the current trigger may not be overwritten.
         Calling this function before a window closes will extend it for 30 s.
         """
+        # TODO: Change the name or construction of this, n implies that it is a number of bins relative to some point
         self._n_trigger_close = self.buffer_analysis.n + self._n_bins_trigger_window
 
     @property
@@ -355,7 +403,26 @@ class AnalysisHandler:
     def current_time(self):
         """Timestamp of data entering the analysis buffer
         """
-        return self._starttime + self.buffer_analysis.n * self.config.base_binsize / 1e3
+        return self._start_time + self.buffer_analysis.n * self.config.base_binsize / 1e3
+
+    def trigger_time(self, ana=None):
+        """
+
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+
+        Returns
+        -------
+
+        """
+        if ana is None:
+            ana = self.analyses[-1]
+
+        if ana.is_online:
+            return self.current_time - ((ana.idx_eod - ana.idx_sw) * self.config.base_binsize / 1e3)
+        else:
+            return -np.inf
 
     @property
     def eps(self):
@@ -382,6 +449,7 @@ class AnalysisHandler:
         """Update SICO sums and computed quantities for all analyses
         """
         for analysis in self.analyses:
+            analysis.utime_sw += int(self.config.base_binsize * 1e6)
             self.update_sums(analysis)
 
             if analysis.is_updatable:
@@ -512,31 +580,46 @@ class AnalysisHandler:
             self.reset_accumulator()
             self.buffer_analysis.append(accumulated_data)
             self.update_analyses()
+            # Get triggerable analyses [ana for ana in self.analyses if ana.is_online and ana.is_triggerable]
+            # For only those analyses, evaluate if a trigger threshold has been met
+            # For FRA, could also check if analysis search window also overlaps with trigger time
             self.process_triggers()
 
     def process_triggers(self):
         """Check if any analysis meets the primary trigger threshold.
         """
-        # Probably out of intended scope for analysis object
-        xi = np.array([ana.xi if (ana.is_online and ana.is_triggerable) else 0
-                       for ana in self.analyses])
-        xi_max = xi.max(initial=0.0)
-        # TODO: Figure out how to optimize this with ana.is_online/is_triggerable - there's a lot of wasted time here
-        # This is built to execute every time the analysis buffer updates, maybe this could be called when the analyses
-        # are updated.
+        # TODO: Check performance of this function
+        # TODO: Move this into the trigger handler if possible
 
-        # Check uncorr. xi against lowest threshold (uncorr. or corr.) to initiate trigger processing
-        if xi_max >= self.config.trigger_level.threshold and xi_max > self.current_trigger.xi:
-            self.trigger_count += 1
-            # Extend trigger window after new highest trigger
-            self.open_trigger_window()
-            idx = xi.argmax()
-            ana = self.analyses[idx]
-            t = (self.buffer_analysis.n - ana.n_to_trigger) * 0.5
+        # Get all potentially triggered analyses
+        potential_analyses = [(i, ana) for i, ana in enumerate(self.analyses)
+                              if self.config.trigger_condition.check(ana)]
 
-            # Corrected signi is set upon trigger becoming finalized
-            self.current_trigger = Trigger(xi=ana.xi, xi_corr=0, t=t, binsize=ana.binsize, offset=ana.offset,
-                                           trigger_no=self.trigger_count, cand_no=self.cand_count+1)
+        # Decide what to do with them, Escalating triggers must be handled differently from Fast Response Triggers
+        if potential_analyses:
+            # Detect Escalating trigger
+            if isinstance(self.config.trigger_condition, FastResponseTrigger):
+                xi = np.array([ana.xi for (_, ana) in potential_analyses])
+                xi_max = xi.max(initial=0.0)
+
+                if xi_max > self.candidates[0].xi:
+                    self.trigger_count += 1
+                    # Extend trigger window after new highest trigger
+                    self.open_trigger_window()
+
+                    # This is a little obtuse, but idx here refers to the index of ana in self.analyses
+                    idx = potential_analyses[xi.argmax()][0]
+                    ana = self.analyses[idx]
+
+                    # Corrected signi is set upon candidate becoming finalized, performed by trigger handler
+                    # TODO: Set this up with from_analysis method
+                    self.candidates[0] = Trigger.from_analysis(ana, self.trigger_count, self.cand_count + 1)
+
+            if isinstance(self.config.trigger_condition, FastResponseTrigger):
+                self.candidates += [Trigger.from_analysis(ana, 1, self.cand_count+1+idx)
+                                    for (idx, ana) in potential_analyses]
+                # TODO: Streamline this when you move it to the trigger handler
+                self._n_trigger_close = 0  # NOTE: This is a hack to immediately finalize the trigger
             # TODO: Fix counting for cands
 
     def get_buffered_xi(self, binsize):
@@ -552,7 +635,6 @@ class AnalysisHandler:
         data : np.ndarray of float
             Buffered xi in the requested binsize
         """
-
         idx_bin = self.config.binsize_ms.argsort(binsize)[0][0]
 
         # Guard against 0-padding at start of run
@@ -580,9 +662,9 @@ class AnalysisHandler:
     def prepare_candidate(self, rmu, rmu_500):
         """Prepares SN candidate for muon correction and further processing
         """
-        self.current_trigger.buffer_xi = self.get_buffered_xi(self.current_trigger.binsize)
-        self.current_trigger.buffer_rmu = {'trigger_binsize': rmu,
-                                           '500ms': rmu_500}
+        self.candidates[0].buffer_xi = self.get_buffered_xi(self.candidates[0].binsize)
+        self.candidates[0].buffer_rmu = {'trigger_binsize': rmu,
+                                         '500ms': rmu_500}
 
     @property
     def trigger_finalized(self):
@@ -590,7 +672,7 @@ class AnalysisHandler:
             If True, the trigger is ready to be processed, the trigger window (`open_trigger_window()`) is closed
             If False, the trigger window has not yet closed, more data must be processed
         """
-        return self.current_trigger.xi > 0 and not self.trigger_pending
+        return len(self.candidates) > 0 and not self.trigger_pending
 
 
 class Analysis:
@@ -598,7 +680,7 @@ class Analysis:
 
     """
 
-    def __init__(self, config, binsize, offset, idx=0, ndom=5160):
+    def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0):
         """Create Analysis object
 
         Parameters
@@ -613,6 +695,8 @@ class Analysis:
             Starting index in analysis buffer, includes time offset
         ndom : int
             Number of DOMs contributing to the analysis
+        start_time : np.datetime64
+            UTC time at the start of Analysis
         """
         if (binsize % config.base_binsize) > 0:  # Binsize must be an integer multiple of base_binsize
             raise RuntimeError(f'Binsize {binsize:d} ms is incompatible, must be factor of {config.base_binsize:d} ms')
@@ -661,11 +745,29 @@ class Analysis:
         # Analysis becomes triggerable when trailing background has filled
         self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / config.base_binsize)
         self.n = 0
+        self.start_time = start_time
+        self.utime_sw = datetime64_to_utime(start_time) - ((self.idx_eod - self.idx_sw) * int(self._base_binsize * 1e6))
+        logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
 
     def __repr__(self):
         repr_str = f"SNDAQ Binned Search #{int((self.binsize + self.offset)/self._base_binsize):<2d}: " +\
             f"{self.binsize} +({self.offset}) s"
         return repr_str
+
+    @property
+    def trigger_utime(self):
+        """Time (measured in ns since year start) that is represented by this analysis' search window
+        """
+        return self.utime_sw if self.is_online else -np.inf
+
+    @property
+    def trigger_datetime64(self):
+        """Time in ms that is represented by this analysis' search window
+        """
+        if self.is_online:
+            return utime_to_datetime64(self.utime_sw, year=self.start_time.item().year)
+        else:
+            return np.datetime64("NaT")
 
     def reset_accum(self):
         """Reset Analysis accumulator sums after collecting 500 ms of data

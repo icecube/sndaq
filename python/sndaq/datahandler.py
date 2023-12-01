@@ -1,10 +1,22 @@
 """Objects and functions for handling and processing raw data used by SNDAQ
 """
-import numpy as np
-import glob
 from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
 from sndaq.buffer import stagingbuffer
 from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
+from sndaq.logging import get_logger
+from sndaq.communication import RunInfoAgent
+
+from sndaq import get_i3creds
+
+import numpy as np
+import glob
+import os
+
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
+
+logger = get_logger()
+_i3user, _i3pass = get_i3creds()
 
 
 class DataHandler:
@@ -25,7 +37,7 @@ class DataHandler:
         self._scaler_dt = self.scaler_udt / 1e7
         self._raw_dt = 2
         self._raw_udt = int(self._raw_dt * 1e7)
-        self._staging_depth = 2000
+        self._staging_depth = 4000
         self._payloads_read = np.zeros(5160, dtype=np.uint32)
 
         self._data = stagingbuffer(size=self._staging_depth, ndom=ndom, dtype=dtype)  #np.zeros((ndom, self._staging_depth), dtype=dtype)
@@ -39,6 +51,8 @@ class DataHandler:
 
         self._pdaqtrigger_file = None
         self._pdaqtrigger_file_glob = None
+
+        self._run_info_agent = RunInfoAgent('i3live')
 
     @property
     def scaler_files(self):
@@ -62,7 +76,8 @@ class DataHandler:
         """
         return self._pdaqtrigger_file_glob
 
-    def get_scaler_files(self, directory):
+    def get_scaler_files(self, directory, start_time, stop_time=None, buffer_time_l=None, buffer_time_t=None,
+                         scaler_file_pattern='sn_{run_no}*.dat.processed'):
         # TODO: Move to file handler
         """Get SN scaler files from a directory
 
@@ -70,8 +85,48 @@ class DataHandler:
         ----------
         directory : str | os.PathLike
             Directory to search for SN data files
+        start_time : str
+            date_time string for start of search
+        stop_time : str
+            date_time string for end of search
+        buffer_time_l : int
+            Amount of time for leading buffer in ms
+        buffer_time_t : int
+            Amount of time for trailing buffer in ms
+        scaler_file_pattern : str
+
         """
-        self._scaler_file_glob = sorted(glob.glob('/'.join((directory, 'sn*.dat'))))  # May need to check sorting order
+        start_datetime = np.datetime64(start_time)
+        stop_datetime = np.datetime64(stop_time) if stop_time is not None else start_datetime
+
+        # Get Run Info
+        run_no = self._run_info_agent.find_run_number(start_datetime)
+        run_info = self._run_info_agent.get_run_info(run_no)
+        run_start = np.datetime64(run_info['start'])
+
+        # Find Corresponding Scaler files
+        self._scaler_file_glob = sorted(
+            glob.glob('/'.join((directory, scaler_file_pattern.format(run_no=run_no)))))  # May need to check sorting order
+
+        logger.debug(f"Searching for files matching pattern {'/'.join((directory, scaler_file_pattern))}")
+        logger.debug(f"start_time={start_time} stop_time={stop_time}")
+
+        # Estimate scaler file times
+        idc = np.array([int(os.path.basename(file).split('_')[2]) for file in self._scaler_file_glob])
+
+        file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
+        t0 = start_datetime - np.timedelta64(buffer_time_t, 'ms')  # Add a minute to ensure
+        t1 = stop_datetime + np.timedelta64(buffer_time_l, 'ms')  # Add a minute to ensure files
+
+        logger.debug(f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
+        logger.debug(f"Searching between times {t0} {t1} , found file times {file_times}")
+
+        # Select files according to specified time window
+        idx_glob = np.where((t0 < file_times) & (file_times < t1))[0]
+        self._scaler_file_glob = np.array(self._scaler_file_glob)[idx_glob]
+        if len(self._scaler_file_glob) == 0:
+            raise Exception("No Scaler files found!")
+        logger.debug(f"Found files: {self._scaler_file_glob}")
 
     def get_pdaqtrigger_files(self, directory):
         # TODO: Move to file handler
@@ -145,7 +200,6 @@ class DataHandler:
         """Roll front of staging buffer off the end, add empty space at back
         """
         self._raw_utime += self._raw_udt  # TODO: Decide if this could instead be tracked as integer of first bin utime
-        self._raw_utime += self._raw_udt
         # Can this rolling operation be done with np.add.at(data[1:]-data[:-1], arange(1, data.size-1)?
         self._data.advance()
 

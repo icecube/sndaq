@@ -13,6 +13,12 @@ from distutils.command.sdist import sdist as DistutilsSdist
 from setuptools import setup, find_packages
 #
 from python.sndaq._git import get_version, SetVersion
+from python.sndaq import base_path
+
+from pybind11.setup_helpers import Pybind11Extension
+
+if not os.path.exists(os.path.join(base_path, 'log')):
+    os.mkdir(os.path.join(base_path, 'log'))
 #
 # Begin setup
 #
@@ -41,9 +47,8 @@ if os.path.isdir('bin'):
     setup_keywords['scripts'] = \
     [fname for fname in glob(os.path.join('bin', '*'))]
 setup_keywords['provides'] = [setup_keywords['name']]
-setup_keywords['requires'] = ['Python (>2.7.0)']
+setup_keywords['requires'] = ['Python (>3.6.0)']
 setup_keywords['zip_safe'] = False
-# setup_keywords['use_2to3'] = False
 setup_keywords['packages'] = find_packages('python')
 setup_keywords['package_dir'] = {'': 'python'}
 setup_keywords['cmdclass'] = {'version': SetVersion, 'sdist': DistutilsSdist}
@@ -73,6 +78,13 @@ with open('requirements.txt', 'r') as f:
 
 setup_keywords['install_requires'] = requires
 setup_keywords['extras_require'] = optionals
+
+setup_keywords['ext_modules'] = [
+    Pybind11Extension(
+        "rebin",
+        sorted(glob("sndaq/util/*.cpp")),
+    ),
+]
 
 #
 # Internal data directories.

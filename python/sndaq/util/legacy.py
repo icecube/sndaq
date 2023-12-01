@@ -201,7 +201,8 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
     rgx_cand_no = "(?<=candidate \#)[0-9]+"
     rgx_ana_no = "(?<=Analysis \#)[0-9]+"
     rgx_xi = "(?<=S=)[0-9].[0-9]+"
-    rgx_xi_corrected = "(?<=Significance corrected from: )[0-9].[0-9]+ to -?[0-9].[0-9]+"  # Combined with check for 'Significance corrected' below
+    # Combined with check for 'Significance corrected' below
+    rgx_xi_corrected = "(?<=Significance corrected from: )[0-9].[0-9]+ to -?[0-9].[0-9]+"
     rgx_time = "(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})"
     for line in cands_from_log(lines):
         if b'corrected' not in line:
@@ -506,11 +507,11 @@ def combine_cands(cand_live, cand_log, cand_data, *, tol=1e-5, verbose=False, us
 
     Parameters
     ----------
-    cand_live : list of dict
+    cand_live : list[dict]
         Dictionaries containing SN candidates from Live
-    cand_log :list of dict
+    cand_log : list[dict]
         Dictionaries containing SN candidates from SNDAQ logs
-    cand_data : list of dict
+    cand_data : list[dict]
         Dictionaries containing SN candidates from SN Data
     tol : float
         Tolerance for difference between SN candidate significances
