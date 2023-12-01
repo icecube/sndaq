@@ -9,6 +9,10 @@ import numpy as np
 import datetime
 import time
 
+from sndaq.logging import get_logger
+
+logger = get_logger()
+
 from sndaq import get_i3creds
 
 try:
@@ -63,6 +67,7 @@ def query_live_json_view(url, params):
     """
     time.sleep(0.1)
     req = Request(url, urlencode(params).encode())
+    logger.debug(f"Sending request to {url}: {params}")
     with urlopen(req) as response:
         data = response.read()
     return json.loads(data)
@@ -117,13 +122,12 @@ class RunInfoAgent(object):
         }
         params.update(_default_query_params)
         data = query_live_json_view(self.url, params)
-        print(data)
+        if not isinstance(data, list):
+            data = [data]
         run_numbers = np.array([run['run_number'] for run in data])
         run_starts = np.array([np.datetime64(run['start']) for run in data])
         run_stops = np.array([np.datetime64(run['stop']) for run in data])
 
-        print(run_starts)
-        print(run_stops)
         # When requesting info from an ongoing run, run_stop will be None
         if np.datetime64("NaT") in run_stops:
             run_starts = run_starts[run_stops != np.datetime64("NaT")]

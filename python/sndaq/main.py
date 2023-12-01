@@ -69,7 +69,8 @@ def main(*args, **kwargs):
 
         start_time = kwargs['start_time'] if 'start_time' in kwargs else None
         stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
-
+        if stop_time is None:
+            stop_time = np.datetime64(start_time) + np.timedelta64(ana.config.base_binsize, 'ms') 
         # TODO Figure out a better way of handling this for FR
         result_dict = {'xi': {},
                        'lightcurve': {}}
@@ -95,7 +96,7 @@ def main(*args, **kwargs):
 
             stop_utime = stop_time.astype('datetime64[ns]') - np.datetime64(f'{stop_time.item().year}', 'Y')
 
-            while dh.payload is not None and ana.trigger_time() < stop_utime:
+            while dh.payload is not None and ana.trigger_time() < stop_utime.astype(int):
 
                 # Add to the current 2ms bin until it has filled...
                 while dh.payload is not None and dh.payload.utime <= dh._raw_utime[1]:
@@ -134,8 +135,8 @@ def main(*args, **kwargs):
                             result_dict['lightcurve'].update({
                                 str(int(ana.config.binsize_ms)):
                                     {'data': ana.get_lightcurve(cand.ana,
-                                                                int(kwargs['duration_pre_trigger']),
-                                                                int(kwargs['duration_post_trigger'])),
+                                                                int(kwargs['lightcurve'][0]),
+                                                                int(kwargs['lightcurve'][1])),
                                      'offset_ms': int(kwargs['duration_pre_trigger'] % ana.config.binsize_ms)}
                             })
                     ana.candidates = []
@@ -146,8 +147,8 @@ def main(*args, **kwargs):
 
         # TODO Move logger messages into function, main shouldn't be too cluttered
         logger.info(f'FRA Request {lms.request_id} Completed')
-        for binsize in ana._binnings:
-            result_dict['lightcurve'].update({str(int(binsize)): {'data': None, 'offset_ms': 0}})
+        #for binsize in ana._binnings:
+        #    result_dict['lightcurve'].update({str(int(binsize)): {'data': None, 'offset_ms': 0}})
 
         lms.fra_result(request_id=lms.request_id, data=result_dict)
 
