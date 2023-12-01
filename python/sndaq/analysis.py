@@ -10,8 +10,7 @@ from sndaq.util import datetime64_to_utime, utime_to_datetime64
 
 logger = get_logger()
 
-_ana_conf_repr_string = """
-Analysis Configuration
+_ana_conf_repr_string = """Analysis Configuration
 ======================
 | 
 | Buffer Configuration

@@ -51,5 +51,6 @@ class TestConfig(unittest.TestCase):
 | Rate: [100.0, 10000.0]
 | Fano Factor: [0.8, 0.2]
 | Abs. Skew < 1.2
+======================
 """
         self.assertEqual(conf_str, config.__repr__())
