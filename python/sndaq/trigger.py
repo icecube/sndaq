@@ -31,6 +31,7 @@ class PrimaryTrigger(TriggerBase):
     """
     name = "primary"
     threshold = 4.0
+    threshold_corr = 0.0
 
     @classmethod
     def check(cls, ana):
@@ -223,7 +224,7 @@ class TriggerConfig:
 class TriggerHandler(TriggerConfig):
     """Handler class for SICO Analysis Triggers
     """
-    def __init__(self, primary_trigger):
+    def __init__(self, primary_trigger=PrimaryTrigger):
         self.primary_trigger = primary_trigger
         super().__init__()
 
