@@ -37,7 +37,7 @@ class DataHandler:
         self._scaler_dt = self.scaler_udt / 1e7
         self._raw_dt = 2
         self._raw_udt = int(self._raw_dt * 1e7)
-        self._staging_depth = 2000
+        self._staging_depth = 4000
         self._payloads_read = np.zeros(5160, dtype=np.uint32)
 
         self._data = stagingbuffer(size=self._staging_depth, ndom=ndom, dtype=dtype)  #np.zeros((ndom, self._staging_depth), dtype=dtype)
