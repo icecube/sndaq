@@ -232,5 +232,5 @@ class LiveMessageSender(object):
         -------
 
         """
-        self.msg.update({"data": data, "request_id": request_id})
+        self.msg.update({'status': "SUCCESS", "data": data, "request_id": request_id})
         self.sender.send_moni(varname='sndaq_fra_info', prio=2, value=self.msg)
