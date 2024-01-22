@@ -89,7 +89,7 @@ setup_keywords['ext_modules'] = [
 #
 # Internal data directories.
 #
-setup_keywords['data_files'] = [('sndaq/data/config', glob('data/config/*'))]
+setup_keywords['data_files'] = [('sndaq/data/config', glob('etc/*.ini'), glob('etc/geometry/*.txt'), glob('etc/effvol/*.txt')]
 #
 # Run setup command.
 #
