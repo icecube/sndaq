@@ -1,6 +1,7 @@
 # SNDAQ - IceCube Supernova DAQ
 
 ![tests](https://github.com/icecube/pysndaq/actions/workflows/tests.yml/badge.svg)
+[![Documentation Status](https://readthedocs.org/projects/sndaq/badge/?version=latest)](https://sndaq.readthedocs.io/en/latest/?badge=latest)
 
 A Python port of [SNDAQ](https://github.com/WIPACrepo/sndaq), the online pulse-counting software used to search for ~1 s bursts of MeV neutrinos from core-collapse supernovae and other luminous transients. Selected references:
 * R. Abbasi et al. (IceCube Collaboration), [IceCube sensitivity for low-energy neutrinos from nearby supernovae](https://doi.org/10.1051/0004-6361/201117810), A&A 535:A109, 2011.
