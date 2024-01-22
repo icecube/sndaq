@@ -12,7 +12,7 @@ class TestConfig(unittest.TestCase):
     def test_from_config(self):
         """Analysis configuration from INI file
         """
-        cfile = os.path.join(sndaq.base_path, 'data/config/analysis.config')
+        cfile = os.path.join(sndaq.base_path, 'etc/analysis.ini')
         config = AnalysisConfig.from_config(conf_path=cfile)
 
         # Test input settings.
