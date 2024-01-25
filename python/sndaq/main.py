@@ -18,7 +18,10 @@ from sndaq.logging import get_logger
 
 logger = get_logger()
 
+
 def launch(*args, **kwargs):
+    """Launches SNDAQ instance
+    """
     logger.debug(f"Launching SNDAQ with the following Configuration:\nargs:{args}\nkwargs:{kwargs}")
     proc = Process(target=main, args=args, kwargs=kwargs)
     logger.info(f"== START ==")
