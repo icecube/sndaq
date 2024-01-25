@@ -175,7 +175,7 @@ class FileHandler:
         diff = (cand.trigger.t - timestamps).astype(int)
 
         # TODO: change this s.t. it depends on the config, this assumes symmetrical time window
-        n_after = 4
+        n_after = 6
         n_before = 6
 
         # Get `n_before` files from before the trigger and `n_after` files from after the trigger
