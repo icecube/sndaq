@@ -115,8 +115,8 @@ class DataHandler:
         idc = np.array([int(os.path.basename(file).split('_')[2]) for file in self._scaler_file_glob])
 
         file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
-        t0 = start_datetime - np.timedelta64(buffer_time_t, 'ms')  # Add a minute to ensure
-        t1 = stop_datetime + np.timedelta64(buffer_time_l, 'ms')  # Add a minute to ensure files
+        t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta(1, 'm'))  # Add a minute to ensure
+        t1 = stop_datetime + (np.timedelta64(buffer_time_l, 'ms') + np.timedelta(1, 'm')) # Add a minute to ensure files
 
         logger.debug(f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
         logger.debug(f"Searching between times {t0} {t1} , found file times {file_times}")

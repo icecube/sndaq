@@ -42,7 +42,7 @@ class AnalysisConfig:
     _raw_binsize = 2  # ms
     _dur_signi_buffer = int(600e3)  # ms (10 min)
     _dur_trigger_window = int(30e3)
-    _trigger_condition = PrimaryTrigger
+    _trigger_condition = FastResponseTrigger  # PrimaryTrigger
 
     # _trigger_level.threshold = 5.8
 
@@ -331,6 +331,18 @@ class AnalysisHandler:
         self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
         self._n_trigger_close = 0
         logger.debug('Analysis Handler Initialized.')
+
+    def status(self):
+        """Obtain a status string
+
+        Returns
+        -------
+        status_string :str
+        """
+        status = ''.join([
+            f"Processing {len(self.analyses):>2d} Analyses"
+        ])
+        return status
 
     def get_lightcurve(self, ana, dur_lct, dur_lcl):
         """Export lightcurve from data buffer
@@ -753,6 +765,21 @@ class Analysis:
         repr_str = f"SNDAQ Binned Search #{int((self.binsize + self.offset)/self._base_binsize):<2d}: " +\
             f"{self.binsize} +({self.offset}) s"
         return repr_str
+
+    def status(self):
+        """Obtain a status string
+
+        Returns
+        -------
+        status_string :str
+        """
+        status = '\n'.join([
+            repr(self),
+            f"is_triggerable: {self.is_triggerable}, is_updatable: {self.is_updatable}, is_online: {self.is_online}",
+            f"n={self.n}, n_accum={self.n_accum}, n_to_trigger={self.n_to_trigger}",
+            f"xi={self.xi}, dmu={self.dmu}, sig_dmu={self.var_dmu}, hit_sum={self.hit_sum}",
+        ])
+        return status
 
     @property
     def trigger_utime(self):
