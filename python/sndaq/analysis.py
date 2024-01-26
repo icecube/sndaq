@@ -378,9 +378,10 @@ class AnalysisHandler:
         # TODO: Add to error checking that lc duration is multiple of min binsize
         idx = (np.arange(nbins_rawt+nbins_rawl)+nbins_shift) // rebin_factor
 
-        # Performs rebinning automatically
-        np.add.at(lightcurve, (idx, np.arange(self.ndom)),
-                  self.buffer_analysis[ana.idx_sw-nbins_rawl:ana.idx_sw+nbins_rawt, :])
+        # Performs rebinning automatically - ana.binsize is integer multiple of analysishandler.config.base_binsize
+        # Reshapes are requires for np.add.at signature - 2nd arg, index needs shape ((n, 1), (1, m)) for (m, n) target
+        np.add.at(lightcurve, (idx.reshape(-1, 1), np.arange(self.ndom).reshape(1, -1)),
+                  self.buffer_analysis[ana.idx_sw - nbins_rawl:ana.idx_sw + nbins_rawt, :])
 
         return lightcurve
 
