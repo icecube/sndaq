@@ -81,8 +81,7 @@ polls to see if `startI3LiveListener.py` is running. If not, it automatically
 restarts the script.
 
 Communication between the VM and the SNEWS server is handled by the third-party
-library ``coincode`` library maintained by `Alec Habig
-<mailto:ahabig@umn.edu>`_.
+library ``coincode`` library maintained by `Alec Habig <mailto:ahabig@umn.edu>`_.
 
 SNEWS Monitoring Shifts
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -98,7 +97,7 @@ First, a shifter must obtain login credentials for:
 * ``sndaq`` virtual machine: contact the `IceCube Helpdesk * <mailto:help@icecube.wisc.edu>`_.
 * Brookhaven National Lab (BNL) SSH Portal ``ssh.bnl.gov``: contact `Brett Viren <mailto:bv@bnl.gov>`_.
 * INFN Bologna Portal, ``lnxbo.bo.infn.it``: contact `Pietro Antonioli <mailto:pietro.antonioli@bo.infn.it>`_.
-* BNL and INFN machines hosting SNEWS alert servers: contact `Kate Scholberg <mailto:schol@phy.duke.edu>`_ or `Alec Habig <mailto:habig@neutrino.d.umn.edu>`_.
+* BNL and INFN machines hosting SNEWS alert servers: contact `Kate Scholberg <mailto:schol@phy.duke.edu>`_ or Alec Habig.
 * `SNEWS Working Group Pages <https://snews.bnl.gov/wg/shift>`_: contact Kate Scholberg or Alec Habig.
 
 The primary SNEWS server is hosted by BNL and a backup is hosted by INFN
@@ -127,12 +126,12 @@ where the arguments to ``cping`` are
 
 .. code-block:: bash
 
-  cping [server] [DDMMYY] [HHMMSS] [nanoseconds] [experiment]
+  cping [server] [DDMMYY] [HHMMSS] [nanoseconds] [xperiment]
 
-with IceCube being experiment 6. After sending a ping from the IceCube system,
-shifters must confirm it has been recieved by the SNEWS alert servers. Log into
-the systems at BNL and INFN Bologna and then to the SNEWS alert servers as
-follows:
+with IceCube being experiment **6**. After sending a ping from the IceCube
+system, shifters must confirm it has been recieved by the SNEWS alert servers.
+Log into the systems at BNL and INFN Bologna and then to the SNEWS alert
+servers as follows:
 
 .. code-block:: bash
 
