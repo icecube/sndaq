@@ -19,41 +19,39 @@ average DOM rate computed with a 10-minute sliding window.
 IceCube Hit Rate
 ----------------
 
-The individual hit rates of the DOMs,
-
-.. math::
-
-  R_i, \qquad i=1, \ldots, N_\mathrm{DOM},
-
-are measured online with 2 ms resolution. The average hit rates are above 500
-Hz per DOM, which is reduced to 280 Hz after the application of an artificial
-deadtime. The DOM rates exhibit season variations of 30 Hz due to muons
-interacting in the detector. The muon correlation can be measured and removed.
+The individual hit rates of the DOMs (:math:`R_i`, where
+:math:`i=1,\ldots,N_\mathrm{DOM}`) are measured online with 2 ms resolution.
+The average hit rates are above 500 Hz/DOM, which is reduced to 280 Hz/DOM
+after the application of an artificial deadtime. The DOM rates exhibit seasonal
+variations of 30 Hz due to muons interacting in the detector. The muon
+correlation can be measured in real time and removed, as shown in the figure
+below.
 
 .. figure:: img/dom_hit_rate.jpg
   :width: 400
   
   DOM hit rates showing seasonal effect (blue curve) and after the seasonal effect is removed using the in-ice muon rate (red curve). From |Abbasi_2023|.
 
-For neutrino energies below 1 GeV, the signal is dominated by backgrounds due
-to radioactive decays in the DOM glass and triboluminescence in the ice. The
-dominant neutrino interaction below 100 MeV is caused by inverse beta decay,
+At neutrino energies below 100 MeV, the data are dominated by backgrounds due
+to dark counts, radioactive decays in the DOM glass, and effects such as
+triboluminescence in the ice. For neutrino signals below 100 MeV, the dominant
+interaction is caused by inverse beta decay,
 
 .. math::
 
   \bar{\nu}_e + p \to n + e^+.
 
-The signal hit rate per DOM from this process is
+In the event of a nearby supernova, the signal hit rate per DOM will be
 
 .. math::
 
   \begin{align*}
-  R(t) &= \epsilon_\mathrm{dead~time}
+  R(t) = \epsilon_\mathrm{dead~time}&
   \frac{n_\mathrm{target}\mathcal{L}^\nu_\mathrm{SN}(t)}{4\pi d^2\langle E_\nu(t)\rangle}
   \int_0^\infty dE_{e^+}
   \int_0^\infty dE_{\nu}
   \\
-  &\qquad
+  &
   \times
   \frac{d\sigma}{dE_{e^+}}(E_{e^+}, E_\nu)\ V_{e^+}^\mathrm{eff}\
   f(E_\nu, \langle E_\nu\rangle, \alpha_\nu, t),
@@ -62,8 +60,8 @@ The signal hit rate per DOM from this process is
 where :math:`n_\mathrm{target}` is the density of protons in ice, :math:`d` is
 the distance to the supernova, :math:`\mathcal{L}^\nu_\mathrm{SN}(t)` is the
 supernova neutrino luminosity, and :math:`f(E_\nu,\langle
-E_\nu\rangle,\alpha_\nu,t)` is the normalized neutrino energy distribution
-depending on the average neutrino energy :math:`\langle E_\nu\rangle` and
+E_\nu\rangle,\alpha_\nu,t)` is the normalized neutrino energy spectrum
+as a function of the average neutrino energy :math:`\langle E_\nu\rangle` and
 spectrum shape parameter :math:`\alpha_\nu`. The quantity :math:`d\sigma/dE` is
 the differential cross section for producing a positron of energy
 :math:`E_{e^+}` from a neutrino of energy :math:`E_\nu` interacting via inverse
@@ -75,7 +73,7 @@ The SNDAQ Likelihood
 --------------------
 
 The best-fit collective change in hit
-rates, :math:`\Delta\mu`, is computed by maximizing the likelihood
+rates, :math:`\Delta\mu`, is computed online by maximizing the likelihood
 
 .. math::
 
@@ -88,8 +86,8 @@ rates, :math:`\Delta\mu`, is computed by maximizing the likelihood
   },
 
 where :math:`\epsilon_i` is the relative efficiency of DOM *i* and
-:math:`\langle\sigma_i\rangle` is the variance of the hit rate estimated in DOM
-*i* in the sliding window.
+:math:`\langle\sigma_i\rangle` is the uncertainty of the hit rate estimated in
+each DOM using a 10-minute sliding window.
 
 The maximum likelihood estimator of :math:`\Delta\mu` is
 
@@ -97,7 +95,7 @@ The maximum likelihood estimator of :math:`\Delta\mu` is
 
   \Delta\mu = \sigma^2_{\Delta\mu} \sum_i^{N_\mathrm{DOM}} \frac{\epsilon_i(R_i - \langle R_i\rangle)}{\langle\sigma_i\rangle^2}
 
-with estimated uncertainty
+with estimated variance 
 
 .. math::
 
