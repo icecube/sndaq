@@ -16,7 +16,7 @@ and pointing information about the supernova for optical follow-up.
 Further information about SNEWS and its successor network, SNEWS 2.0, can be
 found here:
 
-* P. Antonioli et al., `SNEWS: The Supernova Early Warning System * <http://dx.doi.org/10.1088/1367-2630/6/1/114>`_, New J. Phys. 6:114, 2004.
+* P. Antonioli et al., `SNEWS: The Supernova Early Warning System <http://dx.doi.org/10.1088/1367-2630/6/1/114>`_, New J. Phys. 6:114, 2004.
 * S. Al Kharusi et al., `SNEWS 2.0: a next-generation supernova early warning system for multi-messenger astronomy <https://doi.org/10.1088%2F1367-2630%2Fabde33>`_, New J. PHys. 23:3, 2021.
 
 In the following sections, we describe the interaction between IceCube, the
