@@ -6,7 +6,6 @@ from sndaq.filehandler import FileHandler
 from sndaq.datahandler import DataHandler
 from sndaq.trigger import TriggerHandler
 from sndaq.detector import Detector
-from sndaq import base_path
 from livecore.util.misc import exc_string
 from sndaq.communication import LiveMessageSender, get_unique_id
 from sndaq import base_path
