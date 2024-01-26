@@ -1,5 +1,13 @@
 .. _overview:
 
+.. |Abbasi_2011| raw:: html
+
+  <a href="https://doi.org/10.1051/0004-6361/201117810" target="_blank">Abbasi et al., 2011</a>
+
+.. |Abbasi_2023| raw:: html
+
+  <a href="https://doi.org/10.3847/1538-4357/ad07d1" target="_blank">Abbasi et al., 2023</a>
+
 Overview of the Supernova DAQ
 =============================
 
@@ -25,8 +33,7 @@ interacting in the detector. The muon correlation can be measured and removed.
 .. figure:: img/dom_hit_rate.jpg
   :width: 400
   
-  DOM hit rates showing seasonal effect (blue curve) and after the seasonal
-  effect is removed using the in-ice muon rate (red curve).
+  DOM hit rates showing seasonal effect (blue curve) and after the seasonal effect is removed using the in-ice muon rate (red curve). From |Abbasi_2023|.
 
 For neutrino energies below 1 GeV, the signal is dominated by backgrounds due
 to radioactive decays in the DOM glass and triboluminescence in the ice. The
@@ -61,7 +68,8 @@ spectrum shape parameter :math:`\alpha_\nu`. The quantity :math:`d\sigma/dE` is
 the differential cross section for producing a positron of energy
 :math:`E_{e^+}` from a neutrino of energy :math:`E_\nu` interacting via inverse
 beta decay. The effective volume for a single positron is
-:math:`V_{e^+}^\mathrm{eff}`.
+:math:`V_{e^+}^\mathrm{eff}`. Further details are provided in |Abbasi_2011| and
+|Abbasi_2023|.
 
 The SNDAQ Likelihood
 --------------------
@@ -110,18 +118,34 @@ uncertainty in the estimator. The test statistic is estimated in time windows
 lasting 0.5 s, 1.5 s, 4.0 s, and 10.0 s, which are optimized for various
 core-collapse scenarios.
 
-SNDAQ sends out a variety of public and private alerts when TS exceeds a set of
-preprogrammed thresholds (see the escalation scheme on **THIS PAGE**). There is
-a strong seasonal effect observed that produces a tail of high TS values during
-the austral summer, when the atmosphere is less dense and the muon rate in
-IceCube increases. We zero out this effect by measuring the muon rate online
-and de-trending TS in real time to produce a corrected test statistic
+.. figure:: img/sndaq_ts.jpg
+  :width: 400
+
+  Correlation between muon rate and the TS :math:`\xi` in SNDAQ data (blue,
+  top) and distribution of :math:`\xi` (blue, bottom). The red points and
+  histogram show the TS :math:`\xi_\mathrm{corr}` after the muon rate has been
+  decorrelated. From |Abbasi_2023|.
+
+SNDAQ sends out a variety of public and private alerts when the TS exceeds a
+set of preprogrammed thresholds (see the escalation scheme on **THIS PAGE**).
+There is a strong seasonal effect observed that produces a tail of high TS
+values during the austral summer, when the atmosphere is less dense and the
+muon rate in IceCube increases. We zero out this effect by measuring the muon
+rate online and de-trending TS in real time to produce a corrected test
+statistic
 
 .. math::
 
-  \mathrm{TS_corr} = \xi'.
+  \mathrm{TS_corr} = \xi_\mathrm{corr}.
 
-A value of :math:`\xi'>6` occurs by chance less than once per year.
+A value of :math:`\xi_\mathrm{corr}>6` occurs by chance less than once per year.
+
+.. figure:: img/sndaq_ts_corr.jpg
+  :width: 400
+
+  Distribution of the muon-rate corrected SNDAQ test statistic in data (gray)
+  and four CCSN models distributed throughout the Milky Way (top) and the
+  Magellanic Clouds (bottom). From |Abbasi_2023|.
 
 Bayesian Blocks Trigger
 -----------------------
