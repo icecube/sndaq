@@ -30,6 +30,7 @@ author = 'Spencer Griswold, Segev BenZvi, IceCube Collaboration'
 extensions = [
     'sphinx_rtd_theme',
     'sphinx_search.extension',
+    'sphinx.ext.mathjax',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
