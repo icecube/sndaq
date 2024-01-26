@@ -22,6 +22,7 @@ use in IceCube can be found here:
 
    overview.rst
    installation.rst
+   snews.rst
 
 Indices and tables
 ==================

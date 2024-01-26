@@ -1,4 +1,4 @@
 .. _overview:
 
-Overview of the Supernova DAQ (SNDAQ)
-=====================================
+Overview of the Supernova DAQ
+=============================
