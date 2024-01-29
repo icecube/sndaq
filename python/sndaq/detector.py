@@ -16,7 +16,7 @@ dom_table_dtypes = [
 class Detector:
     """IceCube Detector. An object containing DOM tables, maps for DOM IDs and DOM validation functions
     """
-    def __init__(self, doms_table='../../data/config/full_dom_table.txt'):
+    def __init__(self, doms_table='../../etc/full_dom_table.txt'):
         # May need to update file, and perform filtering on IceTop DOMs (08/09/21 SG)
         self.dom_table = np.genfromtxt(doms_table, dtype=dom_table_dtypes,
                                        converters={5: lambda s: int(s, 16)}, encoding=None)
