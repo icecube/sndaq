@@ -385,8 +385,6 @@ class AnalysisHandler:
 
         return lightcurve
 
-
-
     @property
     def trigger_pending(self):
         """Boolean indicating whether a trigger candidate is currently pending. SNDAQ will check for higher triggers for

@@ -78,7 +78,7 @@ class RunInfoAgent(object):
         """
     instance = None
 
-    def __new__(cls, host=None):
+    def __new__(cls, host=None, force=False):
         """
 
         Parameters
@@ -86,12 +86,15 @@ class RunInfoAgent(object):
         host : str
             Host where i3Live service is running
         """
-        if cls.instance is None:
+        if host is None:
+            warnings.warn(f"No host was provided!")
+        elif cls.instance is None:
             cls.instance = super(RunInfoAgent, cls).__new__(cls)
             cls.instance.host = host
             cls.instance.url = f'https://{host}/run_info/'
-        elif cls.instance is not None and host is not None:
-            warnings.warn(f"A run Info Client already exists using host {cls.instance.host}! Ignoring argument `host`")
+        elif force:
+            cls.instance = None
+            return cls.__new__(cls, host, force=True)
         return cls.instance
 
     def find_run_number(self, timestamp=None):

@@ -49,7 +49,7 @@ def main(*args, **kwargs):
             ana_config = kwargs['ana_conf']
         else:
             ana_config = AnalysisConfig.from_config(conf_path=kwargs['ana_conf_path'])
-        ana = AnalysisHandler(ana_config)
+        ana = AnalysisHandler(ana_config)  # ADD DROPPED DOMS!!!
 
         # == FileHandler ==
         # If a config is not provided, use the default
@@ -78,8 +78,9 @@ def main(*args, **kwargs):
                        'lightcurve': {}}
 
         # Main SNDAQ Loop
-        # TODO: Don't forget to fix this!
-        dh.get_scaler_files(fh.dir_scaler_bkp, start_time, stop_time, ana_config.duration_bgl_ms, ana_config.duration_bgt_ms)
+        # TODO: Clean this up!
+        dh.get_scaler_files(fh.dir_scaler_bkp, start_time, stop_time,
+                            ana_config.duration_bgl_ms, ana_config.duration_bgt_ms)
         for file in dh.scaler_files:
             logger.debug(f'Processing {file}')
             dh.set_scaler_file(file)
@@ -102,12 +103,15 @@ def main(*args, **kwargs):
 
                 # Add to the current 2ms bin until it has filled...
                 while dh.payload is not None and dh.payload.utime <= dh._raw_utime[1]:
+
+                    # Skip IceTop
+                    if not i3.isvalid_dom(dh.payload.dom_id):
+                        dh.read_payload()
+                        continue
+
                     idx_dom = i3.get_dom_idx(dh.payload.dom_id)
                     dh.update_buffer(idx_dom)  # Ensures first payload is added to buffer
                     dh.read_payload()
-
-                    while dh.payload is not None and not i3.isvalid_dom(dh.payload.dom_id):  # Skip IceTop
-                        dh.read_payload()
 
                 # Then add the filled 2ms bin to raw analysis buffer
                 if dh._pay is not None:
@@ -157,14 +161,14 @@ def main(*args, **kwargs):
     except KeyboardInterrupt as e:
         logger.error(str(e))
         lms.fra_status('FAIL', lms.request_id)
-        lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={'request_id': lms.request_id, "value": "Manual Abort"})
+        lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={'request_id': lms.request_id,
+                                                                      "value": "Manual Abort"})
     except Exception as e:
         logger.error(exc_string())
         lms.fra_status('FAIL', lms.request_id)
-        lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={"request_id": lms.request_id, "err_msg": exc_string()})
-        #lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={"request_id": lms.request_id, "err_msg": str(e)})
+        lms.sender.send_moni(varname='sndaq_fra_info', prio=2, value={"request_id": lms.request_id,
+                                                                      "err_msg": exc_string()})
     finally:
-
         logger.info('SNDAQ Shutting Down')
         logger.info('Closing ZMQMoniClient')
         # lms.sender.close()
