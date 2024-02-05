@@ -17,7 +17,7 @@ def datetime64_to_utime(timestamp):
     return (timestamp - np.datetime64(f"{timestamp.item().year}", 'Y')).astype('timedelta64[ns]').astype(int)
 
 
-def utime_to_datetime64(utime, year=np.datetime64('now', 'Y').astype(int)):
+def utime_to_datetime64(utime, year=np.datetime64('now', 'Y').item().year):
     """Convert timestamp to ns since year start
 
     Parameters
@@ -31,4 +31,6 @@ def utime_to_datetime64(utime, year=np.datetime64('now', 'Y').astype(int)):
     utime : int
         Time since start of year measured in ns
     """
+    if isinstance(utime, (list, tuple, np.ndarray)):
+        return [np.datetime64(f"{year}", 'Y') + np.timedelta64(t, 'ns') for t in utime]
     return np.datetime64(f"{year}", 'Y') + np.timedelta64(utime, 'ns')
