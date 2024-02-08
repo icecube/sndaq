@@ -511,9 +511,10 @@ class AnalysisHandler:
         """
         # Analysis results are updated by the handler as the analysis class (currently) is intended to be a container
         #   The handler is intended to contain the algorithms
-        mean = analysis.mean
-        var = analysis.var
-        rate = analysis.rate
+        idx = analysis.dom_status
+        mean = analysis.mean[idx]
+        var = analysis.var[idx]
+        rate = analysis.rate[idx]
         signal = rate - mean
 
         sum_rate_dev = np.sum(signal * self.eps / var)
@@ -573,6 +574,49 @@ class AnalysisHandler:
         # _ndom and _dtype could be removed if this was part of an accumulator object, defined during init.
         self._accum_count = self._rebin_factor
 
+    def validate_analyses(self):
+        """Performs validation on the SNDAQ Analyses. Checks are performed DOM-by-DOM and
+        offending DOMs' contributions are removed from analysis quantities.
+        """
+
+        # Note `cond` refers to "condition": A boolean(-like) s.t. `True` reflects proper, healthy operation
+        for analysis in self.analyses:
+
+            # Validation only occurs on analyses that are ready to report results (is_online)
+            #    and are ready to be updated (is_updatable), meaning a new sum can be computed
+            if analysis.is_online and analysis.is_updatable:
+
+                # Analysis has enough contributing DOMs [bool]
+                cond_ndom = analysis.ndom > self.config.min_active_doms
+                if (analysis.is_valid and not cond_ndom) or (~analysis.is_valid and cond_ndom):
+                    analysis.is_valid = ~analysis.is_valid
+                    logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state!  is_valid: {analysis.is_valid}")
+
+                # Analysis has no DOMs that have out-of-bounds background rates [np.ndarray(bool)]
+                # TODO: Check if analysis sums present rates in Hz or counts (/binsize)
+                cond_bkg = (self.config.min_bkg_rate < analysis.mean) & (analysis.mean < self.config.max_bkg_rate)
+
+                if not np.any(cond_bkg == analysis.dom_status):
+                    # Find good doms that have failed validation, and exclude them from analysis
+                    #   (dom_status == True [Good DOM] and cond_bkg == False [DOM failed validation])
+                    idc_sub = np.where(analysis.dom_status & ~cond_bkg)[0]
+
+                    # Find bad doms that have passed validation, and include them analysis
+                    #   (dom_status == False [Bad DOM] and cond_bkg == True [DOM passed validation])
+                    idc_add = np.where(~analysis.dom_status & cond_bkg)[0]
+
+                    # Changes to dom_status must be made after finding indices
+                    if idc_sub.size > 0:
+                        analysis.remove_doms(idc_sub)
+                        logger.debug(f"Analysis #{analysis.n_ana}: {idc_sub.size} DOMs removed for failed validation")
+                    if idc_add.size > 0:
+                        analysis.add_doms(idc_add)
+                        logger.debug(f"Analysis #{analysis.n_ana}: {idc_add.size} DOMs added after passing validation")
+                # TODO: Fano and Jitter checks, applied similarly to the bkg rate check, could be its own func
+
+
+        pass
+
     def update(self, value):
         # TODO: Figure out how to enable streaming only analysis-binning data
         """Update raw buffer, analysis buffer, analyses sums and analysis results
@@ -590,6 +634,7 @@ class AnalysisHandler:
             accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
             self.reset_accumulator()
             self.buffer_analysis.append(accumulated_data)
+            self.validate_analyses()
             self.update_analyses()
             # Get triggerable analyses [ana for ana in self.analyses if ana.is_online and ana.is_triggerable]
             # For only those analyses, evaluate if a trigger threshold has been met
@@ -688,7 +733,6 @@ class AnalysisHandler:
 
 class Analysis:
     """Descriptor object to handle data access and algorithms for SNDAQ sico-analysis
-
     """
 
     def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0):
@@ -716,7 +760,12 @@ class Analysis:
         self._offset = offset  # ms
         self._rebin_factor = int(self._binsize / config.base_binsize)
         # TODO: Decide if ndom should always be 5160 or the number of doms in the current config
+
+        # Bookkeeping quantities
         self._ndom = ndom
+        self._dom_status = np.zeros(self._ndom, dtype=bool)
+        self.n_ana = int((self._binsize + self._offset)/self._base_binsize)
+        self.is_valid = True
 
         self._nbin_nosearch = config.duration_nosearch / self._binsize
         self._nbin_background = (config.duration_bgl_ms + config.duration_bgt_ms) / self._binsize
@@ -761,8 +810,7 @@ class Analysis:
         logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
 
     def __repr__(self):
-        repr_str = f"SNDAQ Binned Search #{int((self.binsize + self.offset)/self._base_binsize):<2d}: " +\
-            f"{self.binsize} +({self.offset}) s"
+        repr_str = f"SNDAQ Binned Search #{self.n_ana:<2d}: {self.binsize} +({self.offset}) s"
         return repr_str
 
     def status(self):
@@ -799,6 +847,40 @@ class Analysis:
         """Reset Analysis accumulator sums after collecting 500 ms of data
         """
         self.n_accum = 0
+
+    def remove_doms(self, idc):
+        """Remove DOMs from analysis specified by indices in sum arrays
+        TODO: Change indices to DOM ID?
+
+        Parameters
+        ----------
+        idc : Indices in sum array of DOM to remove from analysis
+        """
+        self._ndom -= idc.size
+        self._dom_status[idc] = False
+
+    def add_doms(self, idc):
+        """Add DOMs to analysis specified by indices in sum arrays. Intended for use on re-validated DOMs
+        TODO: Change indices to DOM ID?
+
+        Parameters
+        ----------
+        idc : Indices in sum array of DOM to add back into analysis
+        """
+        self._ndom += idc.size
+        self._dom_status[idc] = True
+
+    @property
+    def dom_status(self):
+        """Array of Bool indicating which DOMs contribute (true) or are excluded (false) from this analysis
+        """
+        return self._dom_status
+
+    @property
+    def ndom(self):
+        """Number of DOMs currently contributing to this Analysis
+        """
+        return self._ndom
 
     @property
     def is_online(self):
