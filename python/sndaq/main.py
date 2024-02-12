@@ -9,6 +9,7 @@ from sndaq.detector import Detector
 from livecore.util.misc import exc_string
 from sndaq.communication import LiveMessageSender, get_unique_id
 from sndaq import base_path
+from sndaq.util import utime_to_datetime64
 
 from multiprocessing import Process
 import os
@@ -35,8 +36,7 @@ def launch(*args, **kwargs):
 def main(*args, **kwargs):
     # TODO: Cleanup from spts-test
     logger.info(f"Creating LiveMessageSender sending to expcont:6668")
-    lms = LiveMessageSender(moni_host='expcont', moni_port=6668, msg = kwargs['msg'])
-
+    lms = LiveMessageSender(moni_host='expcont', moni_port=6668, msg=kwargs['msg'], offline=kwargs['offline_mode'])
     request_id = get_unique_id() if 'request_id' not in kwargs else kwargs['request_id']
     logger.debug(f"Registered FRA request: {request_id}")
 
@@ -61,12 +61,22 @@ def main(*args, **kwargs):
         if 'fh_conf_path' not in kwargs:
             conf_path = os.path.join(base_path, "etc/default.ini")
         else:
-            fh_conf_path = kwargs['fh_conf_path']
-        fh = FileHandler.from_config(conf_path=fh_conf_path)
+            conf_path = kwargs['fh_conf_path']
+        fh = FileHandler.from_config(conf_path=conf_path)
 
-        alert = TriggerHandler()
-        dh = DataHandler()
-        i3 = Detector(os.path.join(base_path, "data/config/full_dom_table.txt"))
+        start_time = kwargs['start_time']
+        stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
+        if stop_time is None:
+            stop_time = np.datetime64(start_time) + np.timedelta64(ana.config.base_binsize, 'ms')
+
+        assert (start_time is not None)
+        start_time = np.datetime64(start_time)
+
+        # Only applicable to FastResponseTriggers
+        ana.config._trigger_condition.set_trigger_time(np.datetime64(kwargs['start_time']))
+        alert = TriggerHandler(primary_trigger=ana.config._trigger_condition)
+        dh = DataHandler.from_config(conf_path=conf_path)
+        i3 = Detector(os.path.join(base_path, "etc/full_dom_table.txt"))
 
         lms.fra_status(status='IN PROGRESS', request_id=lms.request_id)
 
@@ -74,18 +84,16 @@ def main(*args, **kwargs):
             if kwargs['no_run_mode']:
                 raise Exception('SNDAQ was launched in `no_run_mode`, execution was automatically aborted.')
 
-        start_time = kwargs['start_time'] if 'start_time' in kwargs else None
-        stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
-        if stop_time is None:
-            stop_time = np.datetime64(start_time) + np.timedelta64(ana.config.base_binsize, 'ms') 
+
         # TODO Figure out a better way of handling this for FR
         result_dict = {'xi': {},
                        'lightcurve': {}}
 
         # Main SNDAQ Loop
         # TODO: Clean this up!
-        dh.get_scaler_files(fh.dir_scaler_bkp, start_time, stop_time,
+        dh.get_scaler_files(fh.dir_scaler, start_time, stop_time,
                             ana_config.duration_bgl_ms, ana_config.duration_bgt_ms)
+
         for file in dh.scaler_files:
             logger.debug(f'Processing {file}')
             dh.set_scaler_file(file)
@@ -97,9 +105,9 @@ def main(*args, **kwargs):
 
             utime = dh.payload.utime
             dh._file_start_utime = utime
-            if dh._start_utime is None and utime is not None:
+            if dh._start_utime is None and utime is not None:  # First file opening in processing run
                 dh._start_utime = utime
-                ana._starttime = utime
+                ana.set_start_time(utime_to_datetime64(utime, start_time.item().year))
                 dh._raw_utime = np.arange(utime, utime + (dh._raw_udt * dh._staging_depth), dh._raw_udt)
 
             stop_utime = stop_time.astype('datetime64[ns]') - np.datetime64(f'{stop_time.item().year}', 'Y')
