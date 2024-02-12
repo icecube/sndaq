@@ -84,8 +84,8 @@ class FastResponseTrigger(TriggerBase):
             return False
         # Broken into two parts because the following processing isn't necessary if the analysis is untriggerable
         ana_time = ana.trigger_datetime64
-        trigger_time_matches = (ana_time < cls.trigger_time &
-                                cls.trigger_time < ana_time + np.timedelta64(ana.binsize, 'ms'))
+        trigger_time_matches = ((ana_time < cls.trigger_time) &
+                                (cls.trigger_time < ana_time + np.timedelta64(ana.binsize, 'ms')))
         return trigger_time_matches
 
 class EscalationTrigger(TriggerBase):
