@@ -96,6 +96,12 @@ class DataHandler:
         scaler_file_pattern : str
 
         """
+        # TODO: Move to Init so this isn't performed multiple times
+        if not os.path.exists(directory):
+            err_msg = f"Requested scaler directory '{directory}' does not exist! "
+            logger.error(err_msg)
+            raise RuntimeError(err_msg)
+
         start_datetime = np.datetime64(start_time)
         stop_datetime = np.datetime64(stop_time) if stop_time is not None else start_datetime
 
