@@ -624,7 +624,7 @@ class AnalysisHandler:
                 # TODO: Check if analysis sums present rates in Hz or counts (/binsize)
                 cond_bkg = (self.config.min_bkg_rate < analysis.mean) & (analysis.mean < self.config.max_bkg_rate)
 
-                if not np.any(cond_bkg == analysis.dom_status):
+                if not np.all(cond_bkg == analysis.dom_status):
                     # Find good doms that have failed validation, and exclude them from analysis
                     #   (dom_status == True [Good DOM] and cond_bkg == False [DOM failed validation])
                     idc_sub = np.where(analysis.dom_status & ~cond_bkg)[0]
@@ -791,7 +791,7 @@ class Analysis:
 
         # Bookkeeping quantities
         self._ndom = ndom
-        self._dom_status = np.zeros(self._ndom, dtype=bool)
+        self._dom_status = np.ones(self._ndom, dtype=bool)
         self.n_ana = int((self._binsize + self._offset)/self._base_binsize)
         self.is_valid = True
 
