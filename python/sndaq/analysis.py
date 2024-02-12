@@ -282,6 +282,11 @@ class AnalysisHandler:
             relative efficiency of contributing DOMs
         dtype
             Data type for SN scaler arrays
+        start_time : np.datetime64
+            Timestamp of the first scaler received by analysis
+        dropped_doms : None or np.ndarray
+            np.ndarray[ndom] containing indices of the DOMs to be dropped from analysis upon startup
+
         """
         self.config = config
 
@@ -293,7 +298,8 @@ class AnalysisHandler:
         else:
             self._eps = eps
         self._dtype = dtype
-        self._start_time = datetime64_to_utime(start_time)
+        self._start_time = start_time
+        self._start_utime = datetime64_to_utime(start_time)
 
         if dropped_doms is not None:
             self._eps = np.delete(self._eps, dropped_doms, axis=0)
@@ -316,7 +322,7 @@ class AnalysisHandler:
             for offset in np.arange(0, binning, 500, dtype=dtype):  # TODO: Increment by binsize not 500
                 idx = int(self._size - (config.duration_nosearch + offset + binning) / config.base_binsize)
                 self.analyses.append(
-                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=start_time)
+                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=self._start_time)
                 )
 
         # Define counter for accumulation used in rebinning from raw to base analysis
@@ -331,6 +337,22 @@ class AnalysisHandler:
         self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
         self._n_trigger_close = 0
         logger.debug('Analysis Handler Initialized.')
+
+    def set_start_time(self, start_time):
+        """Sets time where the leading edge of the raw buffer sits
+
+        Parameters
+        ----------
+        start_time : np.datetime64
+            Analysis start time (Not run start time, necessarily)
+        """
+        self._start_time = start_time
+        self._start_utime = datetime64_to_utime(start_time)
+        for ana in self.analyses:
+            ana.start_time = start_time
+            ana.utime_sw = datetime64_to_utime(start_time) - ((ana.idx_eod - ana.idx_sw) * int(ana._base_binsize * 1e6))
+
+
 
     def status(self):
         """Obtain a status string
@@ -412,9 +434,15 @@ class AnalysisHandler:
 
     @property
     def current_time(self):
-        """Timestamp of data entering the analysis buffer
+        """UTC Timestamp of data entering the analysis buffer
         """
-        return self._start_time + self.buffer_analysis.n * self.config.base_binsize / 1e3
+        return self._start_time + np.timedelta64(self.buffer_analysis.n * self.config.base_binsize / 1e3, 's')
+
+    @property
+    def current_utime(self):
+        """UTC Timestamp of data entering the analysis buffer
+        """
+        return utime_to_datetime64(self.current_utime, year=self._start_time.item().year)
 
     def trigger_time(self, ana=None):
         """
