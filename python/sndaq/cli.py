@@ -157,7 +157,7 @@ def _process_json(args):
     ana_conf._duration_ext_ms = data['excl_duration'][1]
 
     logger.info("Queued Request for processing")  # TODO Add queueing
-    launch_sndaq(ana_conf=ana_conf, request_id=data['request_id'],
+    launch_sndaq(ana_conf=ana_conf, conf_path=args.conf_path, request_id=data['request_id'],
                  start_time=data['start_time'], stop_time=data['stop_time'],
                  lightcurve=data['lc_duration'], msg=data, no_run_mode=False, offline_mode=True)
 

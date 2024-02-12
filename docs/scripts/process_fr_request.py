@@ -3,8 +3,11 @@ Comparable to invoking `$ sndaq process-json ...`
 """
 
 from sndaq.cli import _process_json
-import json
+from sndaq import base_path
+
 import argparse
+import json
+import os
 
 req_dict = {"request_id": "<i3Live request ID>",
             "username": "snfrbot",
@@ -20,11 +23,15 @@ req_dict = {"request_id": "<i3Live request ID>",
             "lc_duration": [30000, 60000]
             }
 req_json = json.dumps(req_dict)
+conf_path = os.path.join(base_path, 'etc/default.ini')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # Copied from sndaq.cli._setup_process_json_parser
     parser.add_argument('json', metavar='JSON', default=None,
                         help='JSON {"use_offsets": "True", "fr_type": "CCSN", ...}')
-    args = parser.parse_args([req_json])
+    # Added for sake of convenience in this script
+    parser.add_argument('conf_path', metavar="CONF_PATH", default=None,
+                        help='Path to main configuration file')
+    args = parser.parse_args([req_json, conf_path])
     _process_json(args)

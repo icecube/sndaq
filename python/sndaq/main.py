@@ -58,10 +58,10 @@ def main(*args, **kwargs):
 
         # == FileHandler ==
         # If a config is not provided, use the default
-        if 'fh_conf_path' not in kwargs:
+        if 'conf_path' not in kwargs:
             conf_path = os.path.join(base_path, "etc/default.ini")
         else:
-            conf_path = kwargs['fh_conf_path']
+            conf_path = kwargs['conf_path']
         fh = FileHandler.from_config(conf_path=conf_path)
 
         start_time = kwargs['start_time']
