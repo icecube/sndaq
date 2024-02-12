@@ -12,6 +12,7 @@ from sndaq import base_path
 
 from multiprocessing import Process
 import os
+import time
 
 from sndaq.logging import get_logger
 
@@ -25,6 +26,10 @@ def launch(*args, **kwargs):
     proc = Process(target=main, args=args, kwargs=kwargs)
     logger.info(f"== START ==")
     proc.start()
+    proc.join(timeout=5)
+    while proc.is_alive():
+        time.sleep(5)
+    logger.info("Process Ended")
 
 
 def main(*args, **kwargs):
