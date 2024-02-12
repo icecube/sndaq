@@ -129,13 +129,13 @@ def _process_json(args):
 
     if data['fr_type'].lower() == 'ccsn':
         logger.debug("Using default ccsn request config")
-        ana_conf_path = os.path.join(base_path, 'data/config/ccsn_fra.config')
+        ana_conf_path = os.path.join(base_path, 'etc/ccsn_fra.ini')
     elif data['fr_type'].lower() == 'merger':
         logger.debug("Using default merger request config")
-        ana_conf_path = os.path.join(base_path, 'data/config/merger_fra.config')
+        ana_conf_path = os.path.join(base_path, 'etc/merger_fra.ini')
     else:
         logger.warning(f"Unknown configuration '{data['fr_type']}' requested")
-        ana_conf_path = os.path.join(base_path, 'data/config/analysis.config')
+        ana_conf_path = os.path.join(base_path, 'etc/analysis.ini')
 
     if not os.path.exists(ana_conf_path):
         msg = f"Analysis Config `{ana_conf_path}` not found"
