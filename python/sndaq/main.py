@@ -107,7 +107,7 @@ def main(*args, **kwargs):
             dh._file_start_utime = utime
             if dh._start_utime is None and utime is not None:  # First file opening in processing run
                 dh._start_utime = utime
-                ana.set_start_time(utime_to_datetime64(utime, start_time.item().year))
+                ana.set_start_time(utime_to_datetime64(utime, year=start_time.item().year))
                 dh._raw_utime = np.arange(utime, utime + (dh._raw_udt * dh._staging_depth), dh._raw_udt)
 
             stop_utime = stop_time.astype('datetime64[ns]') - np.datetime64(f'{stop_time.item().year}', 'Y')
