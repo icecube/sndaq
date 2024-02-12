@@ -5,12 +5,13 @@ from sndaq.buffer import stagingbuffer
 from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
 from sndaq.logging import get_logger
 from sndaq.communication import RunInfoAgent
-
 from sndaq import get_i3creds
 
+from configparser import ConfigParser
 import numpy as np
 import glob
 import os
+import ast  # TODO: Replace with pyyaml
 
 import ssl
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -22,7 +23,7 @@ _i3user, _i3pass = get_i3creds()
 class DataHandler:
     """Handler for SN scaler data files
     """
-    def __init__(self, ndom=5160, dtype=np.uint16):
+    def __init__(self, ndom=5160, dtype=np.uint16, livehost=None, *, use_real_run_no=True, run_no=None):
         """Create DataHandler object
 
         Parameters
@@ -52,7 +53,52 @@ class DataHandler:
         self._pdaqtrigger_file = None
         self._pdaqtrigger_file_glob = None
 
-        self._run_info_agent = RunInfoAgent('i3live')
+        # TODO: Host must be configurable
+        self._run_info_agent = RunInfoAgent(host=livehost, force=False, use_real_run_no=use_real_run_no, run_no=run_no)
+        self._use_real_run_no = use_real_run_no
+        self._run_no = run_no
+
+    @classmethod
+    def from_config(cls, conf=None, conf_path=None):
+        # TODO: Put non-specific conf loading in sndaq function _load_config, use to decorate specific functions
+        #       that perform processing action for sndaq classes that perform processing to return conf_dict
+        """Initialize DataHandler from Config or Config file
+
+        Parameters
+        ----------
+        conf : configparser.ConfigParser
+            Analysis configuration
+        conf_path :
+            Path to file containing analysis configuration
+        """
+        if conf is None and conf_path is None:
+            raise ValueError("Missing configuration")
+        elif conf is None and conf_path is not None:
+            if not os.path.exists(conf_path):
+                err_msg = f"Unable to find config file: {conf_path}"
+                logger.error(err_msg)
+                raise RuntimeError(err_msg)
+            conf = ConfigParser()
+            conf.read(conf_path)
+
+        # Default arguments specified in init
+        livehost = ast.literal_eval(conf['i3live'].get('server', None))
+        use_real_run_no = conf['i3live'].getboolean('use_real_run_no', None)
+        run_no = None
+        if not use_real_run_no:
+            run_no = conf['i3live'].getint('run_no')
+
+        try:
+            return cls(livehost=livehost, use_real_run_no=use_real_run_no, run_no=run_no)
+        except TypeError as err:
+            msg = str(err)
+            bad_field = msg.split('\'')[-2]
+            if "required positional argument" in msg:
+                raise TypeError(f"Config.: {conf} is missing a required field: '{bad_field}'") from err
+            elif "got an unexpected keyword argument" in msg:
+                raise TypeError(f"Config.: {conf} contains an unexpected field: '{bad_field}'") from err
+            else:
+                raise err
 
     @property
     def scaler_files(self):
@@ -77,7 +123,7 @@ class DataHandler:
         return self._pdaqtrigger_file_glob
 
     def get_scaler_files(self, directory, start_time, stop_time=None, buffer_time_l=None, buffer_time_t=None,
-                         scaler_file_pattern='sn_{run_no}*.dat.processed'):
+                         scaler_file_pattern='sn_{run_no}*.dat'):
         # TODO: Move to file handler
         """Get SN scaler files from a directory
 
@@ -105,14 +151,15 @@ class DataHandler:
         start_datetime = np.datetime64(start_time)
         stop_datetime = np.datetime64(stop_time) if stop_time is not None else start_datetime
 
-        # Get Run Info
-        run_no = self._run_info_agent.find_run_number(start_datetime)
-        run_info = self._run_info_agent.get_run_info(run_no)
-        run_start = np.datetime64(run_info['start'])
+        if self._use_real_run_no:
+            # Get Run Info
+            self._run_no = self._run_info_agent.find_run_number(start_datetime)
+            run_info = self._run_info_agent.get_run_info(self._run_no)
+            run_start = np.datetime64(run_info['start'])
 
         # Find Corresponding Scaler files
         self._scaler_file_glob = sorted(
-            glob.glob('/'.join((directory, scaler_file_pattern.format(run_no=run_no)))))  # May need to check sorting order
+            glob.glob('/'.join((directory, scaler_file_pattern.format(run_no=self._run_no)))))  # May need to check sorting order
 
         logger.debug(f"Searching for files matching pattern {'/'.join((directory, scaler_file_pattern))}")
         logger.debug(f"start_time={start_time} stop_time={stop_time}")
@@ -120,16 +167,20 @@ class DataHandler:
         # Estimate scaler file times
         idc = np.array([int(os.path.basename(file).split('_')[2]) for file in self._scaler_file_glob])
 
-        file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
-        t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta(1, 'm'))  # Add a minute to ensure
-        t1 = stop_datetime + (np.timedelta64(buffer_time_l, 'ms') + np.timedelta(1, 'm')) # Add a minute to ensure files
+        if self._use_real_run_no:
+            file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
+            t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta64(1, 'm'))  # Add a minute to ensure
+            t1 = stop_datetime + (np.timedelta64(buffer_time_l, 'ms') + np.timedelta64(1, 'm')) # Add a minute to ensure files
 
-        logger.debug(f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
-        logger.debug(f"Searching between times {t0} {t1} , found file times {file_times}")
+            logger.debug(f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
+            logger.debug(f"Searching between times {t0} {t1} , found file times {file_times}")
 
-        # Select files according to specified time window
-        idx_glob = np.where((t0 < file_times) & (file_times < t1))[0]
-        self._scaler_file_glob = np.array(self._scaler_file_glob)[idx_glob]
+            # Select files according to specified time window
+            idx_glob = np.where((t0 < file_times) & (file_times < t1))[0]
+            self._scaler_file_glob = np.array(self._scaler_file_glob)[idx_glob]
+        else:
+            self._scaler_file_glob = np.array(self._scaler_file_glob)
+
         if len(self._scaler_file_glob) == 0:
             raise Exception("No Scaler files found!")
         logger.debug(f"Found files: {self._scaler_file_glob}")
