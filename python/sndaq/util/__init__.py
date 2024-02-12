@@ -28,7 +28,7 @@ def utime_to_datetime64(utime, year=np.datetime64('now', 'Y').item().year):
         Year, if None is provided, the current year is assumed
     Returns
     -------
-    utime : int
+    utime : np.datetime64
         Time since start of year measured in ns
     """
     if isinstance(utime, (list, tuple, np.ndarray)):
