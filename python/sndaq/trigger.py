@@ -80,7 +80,11 @@ class FastResponseTrigger(TriggerBase):
         trigger_met : bool
             True if Analysis' search window overlaps with
         """
-        if not ana.is_triggerable:
+        # Add visibility to nonetype timestamps error
+        assert(ana.trigger_datetime64 is not None)
+        assert(cls.trigger_time is not None)
+
+        if not ana.is_triggerable or not ana.is_online:
             return False
         # Broken into two parts because the following processing isn't necessary if the analysis is untriggerable
         ana_time = ana.trigger_datetime64
