@@ -348,9 +348,11 @@ class AnalysisHandler:
         """
         self._start_time = start_time
         self._start_utime = datetime64_to_utime(start_time)
+        year = start_time.astype('datetime64[Y]').item().year
         for ana in self.analyses:
             ana.start_time = start_time
-            ana.utime_sw = datetime64_to_utime(start_time) - ((ana.idx_eod - ana.idx_sw) * int(ana._base_binsize * 1e6))
+            ana.year = year
+            ana.utime_sw = datetime64_to_utime(start_time) - ((ana.idx_eod - ana.idx_sw) * int(ana._base_binsize * 1e7))
 
 
 
@@ -834,7 +836,8 @@ class Analysis:
         self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / config.base_binsize)
         self.n = 0
         self.start_time = start_time
-        self.utime_sw = datetime64_to_utime(start_time) - ((self.idx_eod - self.idx_sw) * int(self._base_binsize * 1e6))
+        self.year = start_time.astype('datetime64[Y]').item().year
+        self.utime_sw = datetime64_to_utime(start_time) - ((self.idx_eod - self.idx_sw) * int(self._base_binsize * 1e7))
         logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
 
     def __repr__(self):
@@ -867,7 +870,7 @@ class Analysis:
         """Time in ms that is represented by this analysis' search window
         """
         if self.is_online:
-            return utime_to_datetime64(self.utime_sw, year=self.start_time.item().year)
+            return utime_to_datetime64(self.utime_sw, year=self.year)
         else:
             return np.datetime64("NaT")
 

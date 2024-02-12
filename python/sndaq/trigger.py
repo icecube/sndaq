@@ -92,6 +92,7 @@ class FastResponseTrigger(TriggerBase):
                                 (cls.trigger_time < ana_time + np.timedelta64(ana.binsize, 'ms')))
         return trigger_time_matches
 
+
 class EscalationTrigger(TriggerBase):
     """Base class for Escalating xi threshold triggers
     """
