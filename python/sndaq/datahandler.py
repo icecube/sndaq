@@ -82,7 +82,7 @@ class DataHandler:
             conf.read(conf_path)
 
         # Default arguments specified in init
-        livehost = ast.literal_eval(conf['i3live'].get('server', None))
+        livehost = ast.literal_eval(conf['i3live'].get('host', None))
         use_real_run_no = conf['i3live'].getboolean('use_real_run_no', None)
         run_no = None
         if not use_real_run_no:
