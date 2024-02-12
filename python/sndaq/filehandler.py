@@ -97,7 +97,7 @@ class FileHandler:
     @classmethod
     def from_config(cls, conf=None, conf_path=None):
         # TODO: Figure out how to avoid duplicating code here, perhaps make this an ABC or inherited method?
-        """Initialize AnalysisConfig from Config or Config file
+        """Initialize FileHandler from Config or Config file
 
         Parameters
         ----------
@@ -109,6 +109,10 @@ class FileHandler:
         if conf is None and conf_path is None:
             raise ValueError("Missing configuration")
         elif conf is None and conf_path is not None:
+            if not os.path.exists(conf_path):
+                err_msg = f"Unable to find config file: {conf_path}"
+                logger.error(err_msg)
+                raise RuntimeError(err_msg)
             conf = ConfigParser()
             conf.read(conf_path)
 
