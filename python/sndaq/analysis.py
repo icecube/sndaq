@@ -324,6 +324,7 @@ class AnalysisHandler:
                 self.analyses.append(
                     Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=self._start_time)
                 )
+        Analysis.base_binsize_ms = self.config.base_binsize
 
         # Define counter for accumulation used in rebinning from raw to base analysis
         self._accum_count = self._rebin_factor
@@ -461,7 +462,7 @@ class AnalysisHandler:
             ana = self.analyses[-1]
 
         if ana.is_online:
-            return self.current_time - ((ana.idx_eod - ana.idx_sw) * self.config.base_binsize / 1e3)
+            return self.current_time - np.timedelta64(int(ana.n_eod_sw * ana.base_binsize_ms / 1e3), 's')
         else:
             return -np.inf
 
@@ -764,6 +765,7 @@ class AnalysisHandler:
 class Analysis:
     """Descriptor object to handle data access and algorithms for SNDAQ sico-analysis
     """
+    base_binsize_ms = 500
 
     def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0):
         """Create Analysis object
@@ -808,6 +810,7 @@ class Analysis:
         self._idx_exl = self._idx_sw + int(self.binsize / self._base_binsize)  # Leading exclusion
         self._idx_bgl = self._idx_exl + int(config.duration_exl_ms / self._base_binsize)  # Leading background
         self.idx_eod = self._idx_bgl + int(config.duration_bgl_ms / self._base_binsize)  # End of data in analysis
+        self._n_eod_sw = self.idx_eod - self.idx_sw
 
         # Indices of Analysis buffer for "bins" to add to sums for analysis
         # Using np.arange here (np arrays as indices) allows all analyses to be indexed in the same way
@@ -843,6 +846,7 @@ class Analysis:
     def __repr__(self):
         repr_str = f"SNDAQ Binned Search #{self.n_ana:<2d}: {self.binsize} +({self.offset}) s"
         return repr_str
+
 
     def status(self):
         """Obtain a status string
@@ -1062,6 +1066,10 @@ class Analysis:
             Duration of analysis window in ms, comprised of background, exclusion, and search window
         """
         return (self._nbin_nosearch + 1) * self.binsize
+
+    @property
+    def n_eod_sw(self):
+        return self._n_eod_sw
 
     @property
     def idx_bgl(self):
