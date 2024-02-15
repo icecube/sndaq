@@ -444,7 +444,7 @@ class AnalysisHandler:
     def current_utime(self):
         """UTC Timestamp of data entering the analysis buffer
         """
-        return utime_to_datetime64(self.current_utime, year=self._start_time.item().year)
+        return datetime64_to_utime(self.current_time)
 
     def trigger_time(self, ana=None):
         """
