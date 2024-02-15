@@ -436,9 +436,9 @@ class AnalysisHandler:
 
     @property
     def current_time(self):
-        """UTC Timestamp of data entering the analysis buffer
+        """Timestamp of data entering the analysis buffer
         """
-        return self._start_time + np.timedelta64(self.buffer_analysis.n * self.config.base_binsize / 1e3, 's')
+        return self._start_time + np.timedelta64(int(self.buffer_analysis.n * self.config.base_binsize / 1e3), 's')
 
     @property
     def current_utime(self):
