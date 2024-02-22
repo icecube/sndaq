@@ -464,7 +464,8 @@ class AnalysisHandler:
         if ana.is_online:
             return self.current_time - np.timedelta64(int(ana.n_eod_sw * ana.base_binsize_ms / 1e3), 's')
         else:
-            return -np.inf
+            # This represents time 0 in the Unix Epoch: 1970-01-01 00:00:00 - intended as a sort of minimum value
+            return np.datetime64(0, 'Y')
 
     @property
     def eps(self):
@@ -705,6 +706,7 @@ class AnalysisHandler:
             if isinstance(self.config.trigger_condition, FastResponseTrigger):
                 self.candidates += [Trigger.from_analysis(ana, 1, self.cand_count+1+idx)
                                     for (idx, ana) in potential_analyses]
+                logger.info(f"New FR Triggers formed in analysis {potential_analyses}")
                 # TODO: Streamline this when you move it to the trigger handler
                 self._n_trigger_close = 0  # NOTE: This is a hack to immediately finalize the trigger
             # TODO: Fix counting for cands

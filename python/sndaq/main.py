@@ -94,7 +94,7 @@ def main(*args, **kwargs):
         dh.get_scaler_files(fh.dir_scaler, start_time, stop_time,
                             ana_config.duration_bgl_ms, ana_config.duration_bgt_ms)
 
-        for file in dh.scaler_files:
+        for i, file in enumerate(dh.scaler_files):
             logger.debug(f'Processing {file}')
             dh.set_scaler_file(file)
             # Process file
@@ -110,9 +110,7 @@ def main(*args, **kwargs):
                 ana.set_start_time(utime_to_datetime64(utime, year=start_time.item().year))
                 dh._raw_utime = np.arange(utime, utime + (dh._raw_udt * dh._staging_depth), dh._raw_udt)
 
-            stop_utime = stop_time.astype('datetime64[ns]') - np.datetime64(f'{stop_time.item().year}', 'Y')
-
-            while dh.payload is not None and ana.trigger_time() < stop_utime.astype(int):
+            while dh.payload is not None and ana.trigger_time() < stop_time:
 
                 # Add to the current 2ms bin until it has filled...
                 while dh.payload is not None and dh.payload.utime <= dh._raw_utime[1]:
