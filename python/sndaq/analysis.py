@@ -491,7 +491,7 @@ class AnalysisHandler:
         """Update SICO sums and computed quantities for all analyses
         """
         for analysis in self.analyses:
-            analysis.utime_sw += int(self.config.base_binsize * 1e6)
+            analysis.utime_sw += int(self.config.base_binsize * 1e7)
             self.update_sums(analysis)
 
             if analysis.is_updatable:
