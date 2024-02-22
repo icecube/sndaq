@@ -336,7 +336,7 @@ class AnalysisHandler:
         self.trigger_xi = 0.
         self.triggered_analysis = None
         self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
-        self._n_trigger_close = 0
+        self._n_trigger_close = int(self.config.trigger_condition.dt_to_close / config.base_binsize)
         logger.debug('Analysis Handler Initialized.')
 
     def set_start_time(self, start_time):

@@ -12,6 +12,7 @@ class TriggerBase(ABC):
     """Trigger condition base class
     """
     name: str
+    dt_to_close: float
 
     @classmethod
     @abstractmethod
@@ -32,6 +33,7 @@ class PrimaryTrigger(TriggerBase):
     name = "primary"
     threshold = 4.0
     threshold_corr = 0.0
+    dt_to_close = 30000
 
     @classmethod
     def check(cls, ana):
@@ -55,6 +57,7 @@ class FastResponseTrigger(TriggerBase):
     """
     name = "fast_response"
     trigger_time = None
+    dt_to_close = 0
 
     @classmethod
     def set_trigger_time(cls, trigger_time):
