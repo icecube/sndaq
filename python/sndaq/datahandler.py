@@ -3,6 +3,7 @@
 from sndaq.reader import SN_PayloadReader, PDAQ_PayloadReader
 from sndaq.buffer import stagingbuffer
 from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
+from sndaq.util import utime_to_datetime64
 from sndaq.logging import get_logger
 from sndaq.communication import RunInfoAgent
 from sndaq import get_i3creds
@@ -169,17 +170,23 @@ class DataHandler:
 
         if self._use_real_run_no:
             file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
-            t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta64(1, 'm'))  # Add a minute to ensure
-            t1 = stop_datetime + (np.timedelta64(buffer_time_l, 'ms') + np.timedelta64(1, 'm')) # Add a minute to ensure files
-
-            logger.debug(f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
-            logger.debug(f"Searching between times {t0} {t1} , found file times {file_times}")
-
-            # Select files according to specified time window
-            idx_glob = np.where((t0 < file_times) & (file_times < t1))[0]
-            self._scaler_file_glob = np.array(self._scaler_file_glob)[idx_glob]
         else:
-            self._scaler_file_glob = np.array(self._scaler_file_glob)
+            self.set_scaler_file(self._scaler_file_glob[0])
+            self.read_payload()
+            data_start = utime_to_datetime64(self.payload.utime, start_time.astype('datetime64[Y]').item().year)
+            file_times = np.timedelta64(60, 's') * idc + data_start
+
+        # search between [t_sw - (t_bkg_t + 1 min), t_sw + t_bkg_l + 1min], extra 2 min to ensure file selection
+        t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta64(1, 'm'))
+        t1 = stop_datetime + (np.timedelta64(buffer_time_l, 'ms') + np.timedelta64(1, 'm'))
+
+        logger.debug(
+            f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
+        logger.debug(f"Searching between times {t0} {t1} , found file times {file_times}")
+
+        # Select files according to specified time window
+        idx_glob = np.where((t0 < file_times) & (file_times < t1))[0]
+        self._scaler_file_glob = np.array(self._scaler_file_glob)[idx_glob]
 
         if len(self._scaler_file_glob) == 0:
             raise Exception("No Scaler files found!")
