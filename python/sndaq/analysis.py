@@ -5,7 +5,7 @@ from configparser import ConfigParser
 import ast  # TODO: Replace with pyyaml
 from sndaq.buffer import windowbuffer
 from sndaq.trigger import PrimaryTrigger, Trigger, FastResponseTrigger
-from sndaq.logging import get_logger
+from sndaq.logger import get_logger
 from sndaq.util import datetime64_to_utime, utime_to_datetime64
 
 logger = get_logger()
