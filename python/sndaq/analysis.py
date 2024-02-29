@@ -355,8 +355,6 @@ class AnalysisHandler:
             ana.year = year
             ana.utime_sw = datetime64_to_utime(start_time) - ((ana.idx_eod - ana.idx_sw) * int(ana._base_binsize * 1e7))
 
-
-
     def status(self):
         """Obtain a status string
 
@@ -370,7 +368,7 @@ class AnalysisHandler:
         return status
 
     def get_lightcurve(self, ana, dur_lct, dur_lcl):
-        """Export lightcurve from data buffer
+        """Export hits from all DOMs (Lightcurve) from data buffer
 
         Parameters
         ----------
@@ -409,6 +407,25 @@ class AnalysisHandler:
                   self.buffer_analysis[ana.idx_sw - nbins_rawl:ana.idx_sw + nbins_rawt, :])
 
         return lightcurve
+
+    def get_avg_lightcurve(self, ana, dur_lct, dur_lcl):
+        """Export Average hits per DOM (Avg. Lightcurve) from data buffer
+
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+            SNDAQ Analysis object, contains relevant indices and meta data
+        dur_lct : int
+            Duration of trailing lightcurve in ms (Time after t0=0)
+        dur_lcl : int
+            Duration of leading lightcurve in ms (Time before t0=0)
+
+        Returns
+        -------
+        lightcurve : np.ndarray of int
+            Average SN hit rate in requested binning
+        """
+        return self.get_lightcurve(ana, dur_lct, dur_lcl).mean(axis=1)
 
     @property
     def trigger_pending(self):
