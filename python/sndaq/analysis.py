@@ -569,8 +569,8 @@ class AnalysisHandler:
         eps = self.eps[idx]
         signal = rate - mean
 
-        sum_rate_dev = np.sum(signal * eps / var)
-        sum_inv_var = np.sum(eps ** 2 / var)
+        sum_rate_dev = np.divide(signal * eps, var, out=np.zeros_like(signal), where=var > 0).sum()
+        sum_inv_var = np.divide(eps**2,  var, out=np.zeros_like(eps), where=var > 0).sum()
         analysis.dmu = sum_rate_dev / sum_inv_var
         analysis.var_dmu = 1. / sum_inv_var
 
@@ -579,7 +579,9 @@ class AnalysisHandler:
 
         # calc chi2
         # tmp = (signal*(1. - eps))**2 / (var + eps*abs(signal))
-        analysis.chi2 = np.sum((rate - (mean + eps * signal)) ** 2 / (var + eps * abs(signal)))
+        _num = (rate - (mean + eps * signal)) ** 2
+        _denom = (var + eps * abs(signal))
+        analysis.chi2 = np.divide(_num, _denom, out=np.zeros_like(_num), where=_denom > 0).sum()
 
     def accumulate(self, val, idx):
         """Accumulate 2 ms data into analysis binsize
