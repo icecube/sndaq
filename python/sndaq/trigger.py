@@ -206,7 +206,6 @@ class TriggerConfig:
     # Also, "___TriggerLevel" refers to muon-corrected triggers. For now this scheme is reversed in PySNDAQ,
     # As I (sgriswold) find this more intuitive, and am starting with testing against triggers w/o muon correction
     _trigger_levels = sorted((
-        PrimaryTrigger,
         BasicTrigger,
         SNWGTrigger,
         SNEWSTrigger,
