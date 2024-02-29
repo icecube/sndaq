@@ -248,7 +248,6 @@ class LiveMessageSender(object):
         else:
             err_state = 0
 
-        #TODO Change to Info
         self.msg.update({'status': status, "request_id": request_id})
         self.sender.send_moni(varname='sndaq_fra_info', prio=2, value=self.msg)
         return err_state
@@ -269,4 +268,4 @@ class LiveMessageSender(object):
         """
         self.msg.update({'status': "SUCCESS", "data": data, "request_id": request_id})
         self.sender.send_moni(varname='sndaq_fra_info', prio=2, value=self.msg)
-        logger.info(f"Offline Live Message: varname=sndaq_fra_info,  '{self.msg}'")
+        logger.info("Sent FR result to i3Live")
