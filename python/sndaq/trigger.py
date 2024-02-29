@@ -326,8 +326,8 @@ class Trigger:
         Trigger : sndaq.trigger.Trigger
 
         """
-        return cls.__init__(xi=ana.xi, xi_corr=0, t=ana.trigger_utime, binsize=ana.binsize,
-                            offset=ana.offset, trigger_no=trigger_no, cand_no=cand_no)
+        return cls(ana=ana, xi=ana.xi, xi_corr=0, t=ana.trigger_utime, binsize=ana.binsize,
+                   offset=ana.offset, trigger_no=trigger_no, cand_no=cand_no)
 
 
 class Candidate:
