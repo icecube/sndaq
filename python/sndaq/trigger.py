@@ -247,16 +247,14 @@ class TriggerHandler(TriggerConfig):
         -------
 
         """
-        if isinstance(self.primary_trigger, FastResponseTrigger):
+        if self.primary_trigger is FastResponseTrigger:
             pass
-        elif isinstance(self.primary_trigger, PrimaryTrigger):
-            pass
-
-        levels_to_process = [level for level in self._trigger_levels if (cand.xi >= level.threshold or
-                                                                         cand.xi_corr >= level.threshold_corr)]
-        # Process from highest level to lowest
-        for level in reversed(levels_to_process):
-            level.process(cand)
+        elif self.primary_trigger is PrimaryTrigger:
+            levels_to_process = [level for level in self._trigger_levels if (cand.xi >= level.threshold or
+                                                                             cand.xi_corr >= level.threshold_corr)]
+            # Process from highest level to lowest
+            for level in reversed(levels_to_process):
+                level.process(cand)
 
 
 class Trigger:

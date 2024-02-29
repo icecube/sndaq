@@ -704,7 +704,7 @@ class AnalysisHandler:
         # Decide what to do with them, Escalating triggers must be handled differently from Fast Response Triggers
         if potential_analyses:
             # Detect Escalating trigger
-            if isinstance(self.config.trigger_condition, FastResponseTrigger):
+            if self.config.trigger_condition is PrimaryTrigger:
                 xi = np.array([ana.xi for (_, ana) in potential_analyses])
                 xi_max = xi.max(initial=0.0)
 
@@ -721,7 +721,7 @@ class AnalysisHandler:
                     # TODO: Set this up with from_analysis method
                     self.candidates[0] = Trigger.from_analysis(ana, self.trigger_count, self.cand_count + 1)
 
-            if isinstance(self.config.trigger_condition, FastResponseTrigger):
+            if self.config.trigger_condition is FastResponseTrigger:
                 self.candidates += [Trigger.from_analysis(ana, 1, self.cand_count+1+idx)
                                     for (idx, ana) in potential_analyses]
                 logger.info(f"New FR Triggers formed in analysis {potential_analyses}")
