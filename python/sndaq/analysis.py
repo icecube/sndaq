@@ -1032,6 +1032,18 @@ class Analysis:
         return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum ** 2)) / self.nbin_bg ** 2
 
     @property
+    def fano(self):
+        """Background rate Fano factor (variance-to-mean ratio)
+
+        Returns
+        -------
+        fano : np.ndarray[float]
+            DOM-wise fano factor for all DOMs
+        """
+        # TODO: Unit test for float type!
+        return np.divide(self.var, self.mean, out=np.zeros_like(self.var), where=self.mean != 0)
+
+    @property
     def std(self):
         """Background rate standard deviation
 
