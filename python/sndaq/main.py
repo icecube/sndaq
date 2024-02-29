@@ -141,21 +141,23 @@ def main(*args, **kwargs):
                     ana.cand_count += len(ana.candidates)
                     for cand in ana.candidates:
                         alert.process_cand(cand)
-                        binsize = int(ana.config.binsize_ms)
                         # update if any of the following conditoions are met:
                         # 1 - Result dict is empty of lightcurves
                         # 2 - Result Dict has a lightcurve, but in a different binning
                         # 3 - The current candidate has a higher TS in a seach with the same binsize
                         if (not result_dict['lightcurve'] or
-                            not result_dict['lightcurve'][str(binsize)] or
-                                result_dict['lightcurve'][str(binsize)]['xi'] < cand.xi):
+                            not result_dict['lightcurve'][str(cand.binsize)] or
+                                result_dict['lightcurve'][str(cand.binsize)]['xi'] < cand.xi):
                             result_dict['lightcurve'].update({
-                                str(int(ana.config.binsize_ms)):
-                                    {'data': ana.get_lightcurve(cand.ana,
-                                                                int(kwargs['lightcurve'][0]),
-                                                                int(kwargs['lightcurve'][1])),
-                                     'offset_ms': int(kwargs['duration_pre_trigger'] % ana.config.binsize_ms)}
+                                str(cand.binsize):
+                                    {'data': ana.get_avg_lightcurve(cand.ana,
+                                                                    int(kwargs['lightcurve'][0]),
+                                                                    int(kwargs['lightcurve'][1])),
+                                     'offset_ms': int(kwargs['lightcurve'][0] % cand.binsize)}
                             })
+                            result_dict['xi'].update(
+                                {str(cand.binsize): {'value': cand.ana.xi}}
+                            )
                     ana.candidates = []
                     ana.trigger_count = 0
 
