@@ -1013,7 +1013,7 @@ class Analysis:
 
         Returns
         -------
-        mean : float
+        mean : np.ndarray[float]
             Mean of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
@@ -1025,7 +1025,7 @@ class Analysis:
 
         Returns
         -------
-        variance : float
+        variance : np.ndarray[float]
             Variance of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
