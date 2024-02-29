@@ -15,7 +15,7 @@ from multiprocessing import Process
 import os
 import time
 
-from sndaq.logging import get_logger
+from sndaq.logger import get_logger
 
 logger = get_logger()
 

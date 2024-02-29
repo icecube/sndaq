@@ -5,6 +5,7 @@ from sndaq.buffer import stagingbuffer
 from sndaq.util.rebin import rebin_scalers as c_rebin_scalers
 from sndaq.util import utime_to_datetime64
 from sndaq.logging import get_logger
+from sndaq.logger import get_logger
 from sndaq.communication import RunInfoAgent
 from sndaq import get_i3creds
 

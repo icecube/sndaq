@@ -3,7 +3,7 @@
 import numpy as np
 from abc import ABC, abstractmethod
 from enum import Enum
-from sndaq.logging import get_logger
+from sndaq.logger import get_logger
 
 logger = get_logger()
 
