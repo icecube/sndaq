@@ -514,6 +514,8 @@ class AnalysisHandler:
 
             if analysis.is_updatable:
                 if analysis.is_online:
+                    # Perform validation before computing analysis quantities
+                    self.validate_analysis(analysis)
                     self.update_results(analysis)
                 analysis.reset_accum()  # Reset "updatable" counter TODO: Rename this to be more consistent
 
@@ -624,48 +626,87 @@ class AnalysisHandler:
         # _ndom and _dtype could be removed if this was part of an accumulator object, defined during init.
         self._accum_count = self._rebin_factor
 
-    def validate_analyses(self):
-        """Performs validation on the SNDAQ Analyses. Checks are performed DOM-by-DOM and
+    def _validate_bounded_quantity(self, ana, quantity, q_min, q_max, name=None):
+        """ Perform validation on analysis quantity based on config-specified bounds.
+        DOMs failing validation (quantities outside bounds) are excluded from analysis sums
+        Default Quantites are bkg Hit rate: mean, variance, & fano
+
+        TODO: Would making this a member of the analysis class be better for performance, so as to prevent multiple
+            instances of the same analysis object?
+
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+            Analysis currently begin validated
+        quantity : np.ndarray[float]
+            Analysis quantity on which to perform validation
+        q_min : float
+            Lower bound of `quantity`
+        q_max : float
+            Upper bound of `quantity`
+        name : str
+            Name of quantity used for logs
+
+        See Also
+        --------
+        etc/analysis.ini
+
+        Returns
+        -------
+        mask_good : np.ndarray[bool]
+            Boolean mask of currently-invalid DOMs that should be included in Analysis
+        mask_bad : np.ndarray[bool]
+            Boolean mask of currently-valid DOMs that should be excluded from Analysis
+        """
+        # Condition indicates that quant falls within bounds (True = "Good")
+        cond = (q_min < quantity) & (quantity < q_max)
+
+        # Detect changes, if no changes take no action
+        if not np.all(cond == ana.dom_status):
+            # Find good doms that have failed validation, and exclude them from analysis
+            #   (dom_status == True [Good DOM] and cond_bkg == False [DOM failed validation])
+            mask_bad = ana.dom_status & ~cond
+
+            # Find bad doms that have passed validation, and include them analysis
+            #   (dom_status == False [Bad DOM] and cond_bkg == True [DOM passed validation])
+            mask_good = ~ana.dom_status & cond
+
+            return mask_good, mask_bad
+        else:
+            # True in this case indicates tha this DOM's status should be change, by default make no changes
+            return np.zeros_like(cond), np.zeros_like(cond)
+
+    def validate_analysis(self, analysis):
+        """Performs validation on an SNDAQ Analysis. Checks are performed DOM-by-DOM and
         offending DOMs' contributions are removed from analysis quantities.
         """
+        # Validation only occurs on analyses that are ready to report results (is_online)
+        #    and are ready to be updated (is_updatable), meaning a new sum can be computed
+        if analysis.is_online and analysis.is_updatable:
 
-        # Note `cond` refers to "condition": A boolean(-like) s.t. `True` reflects proper, healthy operation
-        for analysis in self.analyses:
+            # Analysis has enough contributing DOMs [bool]
+            cond_ndom = analysis.ndom > self.config.min_active_doms
+            if (analysis.is_valid and not cond_ndom) or (~analysis.is_valid and cond_ndom):
+                analysis.is_valid = ~analysis.is_valid
+                logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state!  is_valid: {analysis.is_valid}")
 
-            # Validation only occurs on analyses that are ready to report results (is_online)
-            #    and are ready to be updated (is_updatable), meaning a new sum can be computed
-            if analysis.is_online and analysis.is_updatable:
+            # DOM-wise checks
+            mask_good_mean, mask_bad_mean = self._validate_bounded_quantity(analysis, analysis.mean,
+                                                                           self.config.min_bkg_rate,
+                                                                           self.config.max_bkg_rate)
+            mask_good_fano, mask_bad_fano = self._validate_bounded_quantity(analysis, analysis.fano,
+                                                                           self.config.min_bkg_fano,
+                                                                           self.config.max_bkg_fano)
+            mask_good = mask_good_mean & mask_good_fano
+            mask_bad = mask_bad_mean & mask_bad_fano
 
-                # Analysis has enough contributing DOMs [bool]
-                cond_ndom = analysis.ndom > self.config.min_active_doms
-                if (analysis.is_valid and not cond_ndom) or (~analysis.is_valid and cond_ndom):
-                    analysis.is_valid = ~analysis.is_valid
-                    logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state!  is_valid: {analysis.is_valid}")
-
-                # Analysis has no DOMs that have out-of-bounds background rates [np.ndarray(bool)]
-                # TODO: Check if analysis sums present rates in Hz or counts (/binsize)
-                cond_bkg = (self.config.min_bkg_rate < analysis.mean) & (analysis.mean < self.config.max_bkg_rate)
-
-                if not np.all(cond_bkg == analysis.dom_status):
-                    # Find good doms that have failed validation, and exclude them from analysis
-                    #   (dom_status == True [Good DOM] and cond_bkg == False [DOM failed validation])
-                    idc_sub = np.where(analysis.dom_status & ~cond_bkg)[0]
-
-                    # Find bad doms that have passed validation, and include them analysis
-                    #   (dom_status == False [Bad DOM] and cond_bkg == True [DOM passed validation])
-                    idc_add = np.where(~analysis.dom_status & cond_bkg)[0]
-
-                    # Changes to dom_status must be made after finding indices
-                    if idc_sub.size > 0:
-                        analysis.remove_doms(idc_sub)
-                        logger.debug(f"Analysis #{analysis.n_ana}: {idc_sub.size} DOMs removed for failed validation")
-                    if idc_add.size > 0:
-                        analysis.add_doms(idc_add)
-                        logger.debug(f"Analysis #{analysis.n_ana}: {idc_add.size} DOMs added after passing validation")
-                # TODO: Fano and Jitter checks, applied similarly to the bkg rate check, could be its own func
-
-
-        pass
+            if np.any(mask_bad):
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_bad.sum()} DOMs removed after failing validation")
+            if np.any(mask_good):
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_good.sum()} DOMs added after passing validation")
+            # TODO: Add Jitter & Noise Validation
+            # TODO: Add monitoring quantity for number of state changes
+            # TODO: Check if analysis sums present rates in Hz or counts (/binsize)
 
     def update(self, value):
         # TODO: Figure out how to enable streaming only analysis-binning data
@@ -684,7 +725,6 @@ class AnalysisHandler:
             accumulated_data = np.asarray(self._accum_data, dtype=np.uint16)
             self.reset_accumulator()
             self.buffer_analysis.append(accumulated_data)
-            self.validate_analyses()
             self.update_analyses()
             # Get triggerable analyses [ana for ana in self.analyses if ana.is_online and ana.is_triggerable]
             # For only those analyses, evaluate if a trigger threshold has been met
