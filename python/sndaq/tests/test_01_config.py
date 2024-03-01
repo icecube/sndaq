@@ -27,7 +27,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(config.min_bkg_rate, 1e2)
         self.assertEqual(config.max_bkg_rate, 1e4)
         self.assertEqual(config.min_bkg_fano, 0.8)
-        self.assertEqual(config.max_bkg_fano, 0.2)
+        self.assertEqual(config.max_bkg_fano, 2.0)
         self.assertEqual(config.max_bkg_abs_skew, 1.2)
 
         # Test __repr__.
@@ -49,7 +49,7 @@ class TestConfig(unittest.TestCase):
 | DOM Qualification
 | -----------------
 | Rate: [100.0, 10000.0]
-| Fano Factor: [0.8, 0.2]
+| Fano Factor: [0.8, 2.0]
 | Abs. Skew < 1.2
 ======================
 """
