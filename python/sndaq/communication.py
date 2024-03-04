@@ -78,7 +78,7 @@ class RunInfoAgent(object):
         """
     instance = None
 
-    def __new__(cls, host=None, force=False, *, use_real_run_no=True, run_no=None):
+    def __new__(cls, host=None, force=False, *, run_number=None):
         """
 
         Parameters
@@ -92,8 +92,7 @@ class RunInfoAgent(object):
             cls.instance = super(RunInfoAgent, cls).__new__(cls)
             cls.instance.host = host
             cls.instance.url = f'https://{host}/run_info/'
-            cls.instance.use_real_run_no = use_real_run_no
-            cls.instance.run_no = run_no
+            cls.instance.run_number = run_number
         elif force:
             cls.instance = None
             return cls.__new__(cls, host, force=True)
@@ -113,8 +112,8 @@ class RunInfoAgent(object):
         run_number : int
             The run during which `timestamp` falls, or the current run
         """
-        if not self.use_real_run_no:
-            return self.run_no
+        if self.run_number:
+            return self.run_number
         # Assumes run duration is ~8 hrs, extra time is added in order to ensure interval includes the correct run
         if timestamp is None:
             start_time = np.datetime64(datetime.datetime.now().date(), 's')  # 's' is required for proper str formatting
