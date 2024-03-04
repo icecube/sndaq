@@ -50,12 +50,12 @@ def check_cred(USER, PASS):
     return USER, PASS
 
 
-def get_run_info(run_no, USER=None, PASS=None):
+def get_run_info(run_number, USER=None, PASS=None):
     """Get Run Info from I3Live via JSON query
 
     Parameters:
     -----------
-    run_no : int
+    run_number : int
         pDAQ Run number, see https://live.icecube.wisc.edu/auth/?next=/recent/
         for recent Runs. Only runs for which processing has completed are valid
     USER : str
@@ -73,7 +73,7 @@ def get_run_info(run_no, USER=None, PASS=None):
     DATA = {
         'user': USER,
         'pass': PASS,
-        'run_number': run_no
+        'run_number': run_number
     }
 
     sleep(1)  # Required to prevent accidental DDoS
@@ -82,12 +82,12 @@ def get_run_info(run_no, USER=None, PASS=None):
     return data
 
 
-def get_cands_from_live(run_no, USER=None, PASS=None):
+def get_cands_from_live(run_number, USER=None, PASS=None):
     """Get SN candidates from i3Live via JSON query
 
     Parameters
     ----------
-    run_no : int
+    run_number : int
         Run number from which to obtain the candidates
     USER : str
         IceCube username to initiate Request to i3live
@@ -102,7 +102,7 @@ def get_cands_from_live(run_no, USER=None, PASS=None):
     USER, PASS = check_cred(USER, PASS)
     fmt = "%Y-%m-%d %H:%M:%S"
 
-    run_info = get_run_info(run_no, USER, PASS)
+    run_info = get_run_info(run_number, USER, PASS)
     START = dt.datetime.strptime(run_info['start'], fmt)
     STOP = dt.datetime.strptime(run_info['stop'], fmt) + dt.timedelta(minutes=10)
 
@@ -133,13 +133,13 @@ def get_cands_from_live(run_no, USER=None, PASS=None):
     return data
 
 
-def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='./', debug=False):
+def get_cands_from_log(run_number, USER_live, PASS_live, USER_ldap=None, cache_dir='./', debug=False):
     """Get SN candidates from SNDAQ log files (Requires LDAP credentials)
     This function will attempt to download from the data warehouse
 
     Parameters
     ----------
-    run_no : int
+    run_number : int
         Run number from which to obtain the log
         See /data/exp/IceCube/monitoring/sn/... for SNDAQ logs
     USER_live : str
@@ -159,7 +159,7 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
     data : list of dict
         List of candidate descriptions from SNDAQ logfile
     """
-    run_info = get_run_info(run_no, USER_live, PASS_live)
+    run_info = get_run_info(run_number, USER_live, PASS_live)
     if run_info['status'] == 'FAIL':
         if debug:
             return [], []
@@ -170,7 +170,7 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
 
     log_path_remote = f"/data/exp/IceCube/{run_start.year}" \
                       f"/monitoring/sn/{run_stop.month:02d}{run_stop.day:02d}" \
-                      f"/sndaq_{run_no}.tar.gz"
+                      f"/sndaq_{run_number}.tar.gz"
 
     log_path_local = os.path.join(cache_dir, f"{os.path.basename(log_path_remote)}")
     if not os.path.exists(os.path.dirname(log_path_local)):
@@ -184,7 +184,7 @@ def get_cands_from_log(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='
         os.system(cmd_str)
 
     with tarfile.open(log_path_local, 'r') as tf:
-        with tf.extractfile(f'sndaq_{run_no}.log') as log_file:
+        with tf.extractfile(f'sndaq_{run_number}.log') as log_file:
             lines = log_file.readlines()
 
     def cands_from_log(_lines):
@@ -280,12 +280,12 @@ def get_cands_from_sndata(sndata_path):
     return data
 
 
-def get_sndata_dwh_path(run_no, USER_live, PASS_live):
+def get_sndata_dwh_path(run_number, USER_live, PASS_live):
     """Get expected path to SN Data file in IceCube Data WareHouse (dwh)
 
     Parameters
     ----------
-    run_no : int
+    run_number : int
         Run number from which to obtain the log
         See /data/exp/IceCube/monitoring/sn/... for SNDAQ logs
     USER_live : str
@@ -299,7 +299,7 @@ def get_sndata_dwh_path(run_no, USER_live, PASS_live):
         Path to SN Data file(s) for requested run
         NOTE: This path will include a wild card for subruns
     """
-    run_info = get_run_info(run_no, USER_live, PASS_live)
+    run_info = get_run_info(run_number, USER_live, PASS_live)
     fmt = "%Y-%m-%d %H:%M:%S"
     run_start = dt.datetime.strptime(run_info['start'], fmt)
     run_stop = dt.datetime.strptime(run_info['stop'], fmt)
@@ -310,20 +310,20 @@ def get_sndata_dwh_path(run_no, USER_live, PASS_live):
     if (next_year_start - run_stop).seconds < 1200:
         sndata_path = f"/data/exp/IceCube/{run_stop.year + 1}" \
                       f"/internal-system/sndaq/0101" \
-                      f"/sndata_{run_no}_*.tar.gz"
+                      f"/sndata_{run_number}_*.tar.gz"
     else:
         sndata_path = f"/data/exp/IceCube/{run_stop.year}" \
                       f"/internal-system/sndaq/{run_stop.month:02d}{run_stop.day:02d}" \
-                      f"/sndata_{run_no}_*.tar.gz"
+                      f"/sndata_{run_number}_*.tar.gz"
     return sndata_path
 
 
-def get_sndata_file(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='./', *, download=False):
+def get_sndata_file(run_number, USER_live, PASS_live, USER_ldap=None, cache_dir='./', *, download=False):
     """Get SN Data file(s) for specific run
 
     Parameters
     ----------
-    run_no : int
+    run_number : int
         Run number from which to obtain the log
         See /data/exp/IceCube/monitoring/sn/... for SNDAQ logs
     USER_live : str
@@ -343,7 +343,7 @@ def get_sndata_file(run_no, USER_live, PASS_live, USER_ldap=None, cache_dir='./'
     sndata_glob : list of str
         List of paths to SN Data files for the requested run
     """
-    sndata_path_dwh = get_sndata_dwh_path(run_no, USER_live, PASS_live)
+    sndata_path_dwh = get_sndata_dwh_path(run_number, USER_live, PASS_live)
     sndata_path_local = os.path.join(cache_dir, f"{os.path.basename(sndata_path_dwh)}")
 
     if not os.path.exists(cache_dir):

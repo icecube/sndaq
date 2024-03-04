@@ -24,7 +24,7 @@ _i3user, _i3pass = get_i3creds()
 class DataHandler:
     """Handler for SN scaler data files
     """
-    def __init__(self, ndom=5160, dtype=np.uint16, livehost=None, *, use_real_run_no=True, run_no=None):
+    def __init__(self, ndom=5160, dtype=np.uint16, livehost=None, *, run_number=None):
         """Create DataHandler object
 
         Parameters
@@ -55,9 +55,8 @@ class DataHandler:
         self._pdaqtrigger_file_glob = None
 
         # TODO: Host must be configurable
-        self._run_info_agent = RunInfoAgent(host=livehost, force=False, use_real_run_no=use_real_run_no, run_no=run_no)
-        self._use_real_run_no = use_real_run_no
-        self._run_no = run_no
+        self._run_info_agent = RunInfoAgent(host=livehost, force=False, run_number=run_number)
+        self._run_number = run_number
 
     @classmethod
     def from_config(cls, conf=None, conf_path=None):
@@ -84,13 +83,10 @@ class DataHandler:
 
         # Default arguments specified in init
         livehost = ast.literal_eval(conf['i3live'].get('host', None))
-        use_real_run_no = conf['i3live'].getboolean('use_real_run_no', None)
-        run_no = None
-        if not use_real_run_no:
-            run_no = conf['i3live'].getint('run_no')
+        run_number = conf['i3live'].getint('run_number', None)
 
         try:
-            return cls(livehost=livehost, use_real_run_no=use_real_run_no, run_no=run_no)
+            return cls(livehost=livehost, run_number=run_number)
         except TypeError as err:
             msg = str(err)
             bad_field = msg.split('\'')[-2]
@@ -124,7 +120,7 @@ class DataHandler:
         return self._pdaqtrigger_file_glob
 
     def get_scaler_files(self, directory, start_time, stop_time=None, buffer_time_l=None, buffer_time_t=None,
-                         scaler_file_pattern='sn_{run_no}*.dat'):
+                         scaler_file_pattern='sn_{run_number}*.dat'):
         # TODO: Move to file handler
         """Get SN scaler files from a directory
 
@@ -152,15 +148,15 @@ class DataHandler:
         start_datetime = np.datetime64(start_time)
         stop_datetime = np.datetime64(stop_time) if stop_time is not None else start_datetime
 
-        if self._use_real_run_no:
+        if not self._run_number:
             # Get Run Info
-            self._run_no = self._run_info_agent.find_run_number(start_datetime)
-            run_info = self._run_info_agent.get_run_info(self._run_no)
-            run_start = np.datetime64(run_info['start'])
+            self._run_number = self._run_info_agent.find_run_number(start_datetime)
+            # run_info = self._run_info_agent.get_run_info(self._run_number)
+            # run_start = np.datetime64(run_info['start'])
 
         # Find Corresponding Scaler files
         self._scaler_file_glob = sorted(
-            glob.glob('/'.join((directory, scaler_file_pattern.format(run_no=self._run_no)))))  # May need to check sorting order
+            glob.glob('/'.join((directory, scaler_file_pattern.format(run_number=self._run_number)))))
 
         logger.debug(f"Searching for files matching pattern {'/'.join((directory, scaler_file_pattern))}")
         logger.debug(f"start_time={start_time} stop_time={stop_time}")
@@ -168,13 +164,14 @@ class DataHandler:
         # Estimate scaler file times
         idc = np.array([int(os.path.basename(file).split('_')[2]) for file in self._scaler_file_glob])
 
-        if self._use_real_run_no:
-            file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
-        else:
-            self.set_scaler_file(self._scaler_file_glob[0])
-            self.read_payload()
-            data_start = utime_to_datetime64(self.payload.utime, start_time.astype('datetime64[Y]').item().year)
-            file_times = np.timedelta64(60, 's') * idc + data_start
+        # TODO: Revisit getting file times based on run start time
+        # if self._use_real_run_no:
+        #     file_times = np.timedelta64(60, 's') * idc + run_start  # Each file is about a minute
+        # else:
+        self.set_scaler_file(self._scaler_file_glob[0])
+        self.read_payload()
+        data_start = utime_to_datetime64(self.payload.utime, start_time.astype('datetime64[Y]').item().year)
+        file_times = np.timedelta64(60, 's') * idc + data_start
 
         # search between [t_sw - (t_bkg_t + 1 min), t_sw + t_bkg_l + 1min], extra 2 min to ensure file selection
         t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta64(1, 'm'))
