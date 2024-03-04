@@ -834,7 +834,7 @@ class Analysis:
     """
     base_binsize_ms = 500
 
-    def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0):
+    def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0, n_ana=0):
         """Create Analysis object
 
         Parameters
@@ -907,7 +907,10 @@ class Analysis:
         self.n = 0
         self.start_time = start_time
         self.year = start_time.astype('datetime64[Y]').item().year
-        self.utime_sw = datetime64_to_utime(start_time) - ((self.idx_eod - self.idx_sw) * int(self._base_binsize * 1e7))
+        # search window is shifted back in time, offset pushes it further back in time
+        self.utime_sw = datetime64_to_utime(start_time) - (
+                self._n_eod_sw * int(self._base_binsize * 1e7) + int(self._offset * 1e7)
+        )
         logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
 
     def __repr__(self):

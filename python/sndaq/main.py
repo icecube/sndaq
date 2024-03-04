@@ -67,7 +67,7 @@ def main(*args, **kwargs):
         start_time = kwargs['start_time']
         stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
         if stop_time is None:
-            stop_time = np.datetime64(start_time) + np.timedelta64(ana.config.base_binsize, 'ms')
+            stop_time = np.datetime64(start_time) + np.timedelta64(max(ana.config.binsize_ms), 'ms')
 
         assert (start_time is not None)
         start_time = np.datetime64(start_time)
