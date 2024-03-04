@@ -141,23 +141,26 @@ def main(*args, **kwargs):
                     ana.cand_count += len(ana.candidates)
                     for cand in ana.candidates:
                         alert.process_cand(cand)
-                        # update if any of the following conditoions are met:
-                        # 1 - Result dict is empty of lightcurves
-                        # 2 - Result Dict has a lightcurve, but in a different binning
-                        # 3 - The current candidate has a higher TS in a seach with the same binsize
-                        if (not result_dict['lightcurve'] or
-                            not result_dict['lightcurve'][str(cand.binsize)] or
-                                result_dict['lightcurve'][str(cand.binsize)]['xi'] < cand.xi):
+
+                        # Update if either of the following conditions are met:
+                        # 1 - The dict lacks a lightcurve & xi in this binning (Only one need be detected)
+                        # 2 - The current candidate has a higher xi result than the previously stored candidate
+                        # NOTE: Here, get() provides a safe way to access the dict without crashing due to KeyErrors
+                        if (not result_dict['lightcurve'].get(str(cand.binsize), None) or
+                                result_dict['lightcurve'].get(str(cand.binsize), {}).get('xi', -np.inf) < cand.xi):
                             result_dict['lightcurve'].update({
-                                str(cand.binsize):
-                                    {'data': ana.get_avg_lightcurve(cand.ana,
-                                                                    int(kwargs['lightcurve'][0]),
-                                                                    int(kwargs['lightcurve'][1])),
-                                     'offset_ms': int(kwargs['lightcurve'][0] % cand.binsize)}
+                                str(cand.binsize): {
+                                    'data': ana.get_avg_lightcurve(cand.ana,
+                                                                   int(kwargs['lightcurve'][0]),
+                                                                   int(kwargs['lightcurve'][1])),
+                                    'offset_ms': int(kwargs['lightcurve'][0] % cand.binsize)}
                             })
-                            result_dict['xi'].update(
-                                {str(cand.binsize): {'value': cand.ana.xi}}
-                            )
+                            result_dict['xi'].update({
+                                str(cand.binsize): {
+                                    'value': cand.ana.xi}
+                            })
+
+                    # Reset Pending Trigger counter & container
                     ana.candidates = []
                     ana.trigger_count = 0
 
