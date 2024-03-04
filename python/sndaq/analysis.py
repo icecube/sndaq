@@ -631,7 +631,7 @@ class AnalysisHandler:
         # _ndom and _dtype could be removed if this was part of an accumulator object, defined during init.
         self._accum_count = self._rebin_factor
 
-    def _validate_bounded_quantity(self, ana, quantity, q_min, q_max, name=None):
+    def _validate_bounded_quantity(self, ana, quantity, q_min, q_max):
         """ Perform validation on analysis quantity based on config-specified bounds.
         DOMs failing validation (quantities outside bounds) are excluded from analysis sums
         Default Quantites are bkg Hit rate: mean, variance, & fano
@@ -691,24 +691,26 @@ class AnalysisHandler:
 
             # Analysis has enough contributing DOMs [bool]
             cond_ndom = analysis.ndom > self.config.min_active_doms
-            if (analysis.is_valid and not cond_ndom) or (~analysis.is_valid and cond_ndom):
-                analysis.is_valid = ~analysis.is_valid
-                logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state!  is_valid: {analysis.is_valid}")
+            if (analysis.is_valid and not cond_ndom) or (not analysis.is_valid and cond_ndom):
+                analysis.is_valid = not analysis.is_valid
+                logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state[{analysis.ndom}]!  is_valid: {analysis.is_valid:}")
 
             # DOM-wise checks
             mask_good_mean, mask_bad_mean = self._validate_bounded_quantity(analysis, analysis.mean,
-                                                                           self.config.min_bkg_rate,
-                                                                           self.config.max_bkg_rate)
+                                                                            self.config.min_bkg_rate,
+                                                                            self.config.max_bkg_rate)
             mask_good_fano, mask_bad_fano = self._validate_bounded_quantity(analysis, analysis.fano,
-                                                                           self.config.min_bkg_fano,
-                                                                           self.config.max_bkg_fano)
+                                                                            self.config.min_bkg_fano,
+                                                                            self.config.max_bkg_fano)
             mask_good = mask_good_mean & mask_good_fano
             mask_bad = mask_bad_mean & mask_bad_fano
 
             if np.any(mask_bad):
                 logger.debug(f"Analysis #{analysis.n_ana}: {mask_bad.sum()} DOMs removed after failing validation")
+                analysis.remove_doms(mask_bad)
             if np.any(mask_good):
                 logger.debug(f"Analysis #{analysis.n_ana}: {mask_good.sum()} DOMs added after passing validation")
+                analysis.add_doms(mask_good)
             # TODO: Add Jitter & Noise Validation
             # TODO: Add monitoring quantity for number of state changes
             # TODO: Check if analysis sums present rates in Hz or counts (/binsize)
@@ -948,27 +950,30 @@ class Analysis:
         """
         self.n_accum = 0
 
-    def remove_doms(self, idc):
-        """Remove DOMs from analysis specified by indices in sum arrays
-        TODO: Change indices to DOM ID?
+    def remove_doms(self, mask):
+        """Remove DOMs from analysis specified by boolean mask of DOMs in sum arrays
+        TODO: better to do with idx or by mask?
 
         Parameters
         ----------
-        idc : Indices in sum array of DOM to remove from analysis
+        mask : np.ndarray[bool]
+            mask of DOMs what are to be removed from analysis
         """
-        self._ndom -= idc.size
-        self._dom_status[idc] = False
+        self._ndom -= mask.sum()
+        self._dom_status[mask] = False
 
-    def add_doms(self, idc):
-        """Add DOMs to analysis specified by indices in sum arrays. Intended for use on re-validated DOMs
-        TODO: Change indices to DOM ID?
+    def add_doms(self, mask):
+        """Add DOMs to analysis specified by boolean mask of DOMs in sum arrays.
+        Intended for use on re-validated DOMs, not to populate the DOM table
+        TODO: better to do with idx or by mask?
 
         Parameters
         ----------
-        idc : Indices in sum array of DOM to add back into analysis
+        mask : np.ndarray[bool]
+            mask of DOMs what are to be re-added to analysis
         """
-        self._ndom += idc.size
-        self._dom_status[idc] = True
+        self._ndom += mask.sum()
+        self._dom_status[mask] = True
 
     @property
     def dom_status(self):
