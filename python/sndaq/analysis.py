@@ -159,7 +159,7 @@ class AnalysisConfig:
 
     @property
     def binsize_ms(self):
-        """Base analysis binsize in ms
+        """Analyses binsizes in ms
 
         Returns
         -------
@@ -318,12 +318,15 @@ class AnalysisHandler:
 
         # Create analyses
         self.analyses = []
+        n = 0
         for binning in np.asarray(self._binnings, dtype=dtype):
             for offset in np.arange(0, binning, 500, dtype=dtype):  # TODO: Increment by binsize not 500
                 idx = int(self._size - (config.duration_nosearch + offset + binning) / config.base_binsize)
                 self.analyses.append(
-                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=self._start_time)
+                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=self._start_time, n_ana=n)
                 )
+                n += 1
+
         Analysis.base_binsize_ms = self.config.base_binsize
 
         # Define counter for accumulation used in rebinning from raw to base analysis
@@ -858,7 +861,7 @@ class Analysis:
         # Bookkeeping quantities
         self._ndom = ndom
         self._dom_status = np.ones(self._ndom, dtype=bool)
-        self.n_ana = int((self._binsize + self._offset)/self._base_binsize)
+        self.n_ana = n_ana
         self.is_valid = True
 
         self._nbin_nosearch = config.duration_nosearch / self._binsize
