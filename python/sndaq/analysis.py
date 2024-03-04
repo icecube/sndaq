@@ -42,7 +42,7 @@ class AnalysisConfig:
     _raw_binsize = 2  # ms
     _dur_signi_buffer = int(600e3)  # ms (10 min)
     _dur_trigger_window = int(30e3)
-    _trigger_condition = PrimaryTrigger
+    _trigger_condition = FastResponseTrigger  # PrimaryTrigger
 
     # _trigger_level.threshold = 5.8
 
@@ -282,6 +282,11 @@ class AnalysisHandler:
             relative efficiency of contributing DOMs
         dtype
             Data type for SN scaler arrays
+        start_time : np.datetime64
+            Timestamp of the first scaler received by analysis
+        dropped_doms : None or np.ndarray
+            np.ndarray[ndom] containing indices of the DOMs to be dropped from analysis upon startup
+
         """
         self.config = config
 
@@ -293,7 +298,8 @@ class AnalysisHandler:
         else:
             self._eps = eps
         self._dtype = dtype
-        self._start_time = datetime64_to_utime(start_time)
+        self._start_time = start_time
+        self._start_utime = datetime64_to_utime(start_time)
 
         if dropped_doms is not None:
             self._eps = np.delete(self._eps, dropped_doms, axis=0)
@@ -316,8 +322,9 @@ class AnalysisHandler:
             for offset in np.arange(0, binning, 500, dtype=dtype):  # TODO: Increment by binsize not 500
                 idx = int(self._size - (config.duration_nosearch + offset + binning) / config.base_binsize)
                 self.analyses.append(
-                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=start_time)
+                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=self._start_time)
                 )
+        Analysis.base_binsize_ms = self.config.base_binsize
 
         # Define counter for accumulation used in rebinning from raw to base analysis
         self._accum_count = self._rebin_factor
@@ -329,11 +336,39 @@ class AnalysisHandler:
         self.trigger_xi = 0.
         self.triggered_analysis = None
         self._n_bins_trigger_window = int(config.dur_trigger_window / config.base_binsize)
-        self._n_trigger_close = 0
+        self._n_trigger_close = int(self.config.trigger_condition.dt_to_close / config.base_binsize)
         logger.debug('Analysis Handler Initialized.')
 
+    def set_start_time(self, start_time):
+        """Sets time where the leading edge of the raw buffer sits
+
+        Parameters
+        ----------
+        start_time : np.datetime64
+            Analysis start time (Not run start time, necessarily)
+        """
+        self._start_time = start_time
+        self._start_utime = datetime64_to_utime(start_time)
+        year = start_time.astype('datetime64[Y]').item().year
+        for ana in self.analyses:
+            ana.start_time = start_time
+            ana.year = year
+            ana.utime_sw = datetime64_to_utime(start_time) - ((ana.idx_eod - ana.idx_sw) * int(ana._base_binsize * 1e7))
+
+    def status(self):
+        """Obtain a status string
+
+        Returns
+        -------
+        status_string :str
+        """
+        status = ''.join([
+            f"Processing {len(self.analyses):>2d} Analyses"
+        ])
+        return status
+
     def get_lightcurve(self, ana, dur_lct, dur_lcl):
-        """Export lightcurve from data buffer
+        """Export hits from all DOMs (Lightcurve) from data buffer
 
         Parameters
         ----------
@@ -366,13 +401,31 @@ class AnalysisHandler:
         # TODO: Add to error checking that lc duration is multiple of min binsize
         idx = (np.arange(nbins_rawt+nbins_rawl)+nbins_shift) // rebin_factor
 
-        # Performs rebinning automatically
-        np.add.at(lightcurve, (idx, np.arange(self.ndom)),
-                  self.buffer_analysis[ana.idx_sw-nbins_rawl:ana.idx_sw+nbins_rawt, :])
+        # Performs rebinning automatically - ana.binsize is integer multiple of analysishandler.config.base_binsize
+        # Reshapes are requires for np.add.at signature - 2nd arg, index needs shape ((n, 1), (1, m)) for (m, n) target
+        np.add.at(lightcurve, (idx.reshape(-1, 1), np.arange(self.ndom).reshape(1, -1)),
+                  self.buffer_analysis[ana.idx_sw - nbins_rawl:ana.idx_sw + nbins_rawt, :])
 
         return lightcurve
 
+    def get_avg_lightcurve(self, ana, dur_lct, dur_lcl):
+        """Export Average hits per DOM (Avg. Lightcurve) from data buffer
 
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+            SNDAQ Analysis object, contains relevant indices and meta data
+        dur_lct : int
+            Duration of trailing lightcurve in ms (Time after t0=0)
+        dur_lcl : int
+            Duration of leading lightcurve in ms (Time before t0=0)
+
+        Returns
+        -------
+        lightcurve : np.ndarray of int
+            Average SN hit rate in requested binning
+        """
+        return self.get_lightcurve(ana, dur_lct, dur_lcl).mean(axis=1)
 
     @property
     def trigger_pending(self):
@@ -403,7 +456,13 @@ class AnalysisHandler:
     def current_time(self):
         """Timestamp of data entering the analysis buffer
         """
-        return self._start_time + self.buffer_analysis.n * self.config.base_binsize / 1e3
+        return self._start_time + np.timedelta64(int(self.buffer_analysis.n * self.config.base_binsize / 1e3), 's')
+
+    @property
+    def current_utime(self):
+        """UTC Timestamp of data entering the analysis buffer
+        """
+        return datetime64_to_utime(self.current_time)
 
     def trigger_time(self, ana=None):
         """
@@ -420,9 +479,10 @@ class AnalysisHandler:
             ana = self.analyses[-1]
 
         if ana.is_online:
-            return self.current_time - ((ana.idx_eod - ana.idx_sw) * self.config.base_binsize / 1e3)
+            return self.current_time - np.timedelta64(int(ana.n_eod_sw * ana.base_binsize_ms / 1e3), 's')
         else:
-            return -np.inf
+            # This represents time 0 in the Unix Epoch: 1970-01-01 00:00:00 - intended as a sort of minimum value
+            return np.datetime64(0, 'Y')
 
     @property
     def eps(self):
@@ -449,11 +509,13 @@ class AnalysisHandler:
         """Update SICO sums and computed quantities for all analyses
         """
         for analysis in self.analyses:
-            analysis.utime_sw += int(self.config.base_binsize * 1e6)
+            analysis.utime_sw += int(self.config.base_binsize * 1e7)
             self.update_sums(analysis)
 
             if analysis.is_updatable:
                 if analysis.is_online:
+                    # Perform validation before computing analysis quantities
+                    self.validate_analysis(analysis)
                     self.update_results(analysis)
                 analysis.reset_accum()  # Reset "updatable" counter TODO: Rename this to be more consistent
 
@@ -500,13 +562,15 @@ class AnalysisHandler:
         """
         # Analysis results are updated by the handler as the analysis class (currently) is intended to be a container
         #   The handler is intended to contain the algorithms
-        mean = analysis.mean
-        var = analysis.var
-        rate = analysis.rate
+        idx = analysis.dom_status
+        mean = analysis.mean[idx]
+        var = analysis.var[idx]
+        rate = analysis.rate[idx]
+        eps = self.eps[idx]
         signal = rate - mean
 
-        sum_rate_dev = np.sum(signal * self.eps / var)
-        sum_inv_var = np.sum(self.eps ** 2 / var)
+        sum_rate_dev = np.divide(signal * eps, var, out=np.zeros_like(signal), where=var > 0).sum()
+        sum_inv_var = np.divide(eps**2,  var, out=np.zeros_like(eps), where=var > 0).sum()
         analysis.dmu = sum_rate_dev / sum_inv_var
         analysis.var_dmu = 1. / sum_inv_var
 
@@ -515,7 +579,9 @@ class AnalysisHandler:
 
         # calc chi2
         # tmp = (signal*(1. - eps))**2 / (var + eps*abs(signal))
-        analysis.chi2 = np.sum((rate - (mean + self.eps * signal)) ** 2 / (var + self.eps * abs(signal)))
+        _num = (rate - (mean + eps * signal)) ** 2
+        _denom = (var + eps * abs(signal))
+        analysis.chi2 = np.divide(_num, _denom, out=np.zeros_like(_num), where=_denom > 0).sum()
 
     def accumulate(self, val, idx):
         """Accumulate 2 ms data into analysis binsize
@@ -562,6 +628,88 @@ class AnalysisHandler:
         # _ndom and _dtype could be removed if this was part of an accumulator object, defined during init.
         self._accum_count = self._rebin_factor
 
+    def _validate_bounded_quantity(self, ana, quantity, q_min, q_max, name=None):
+        """ Perform validation on analysis quantity based on config-specified bounds.
+        DOMs failing validation (quantities outside bounds) are excluded from analysis sums
+        Default Quantites are bkg Hit rate: mean, variance, & fano
+
+        TODO: Would making this a member of the analysis class be better for performance, so as to prevent multiple
+            instances of the same analysis object?
+
+        Parameters
+        ----------
+        ana : sndaq.analysis.Analysis
+            Analysis currently begin validated
+        quantity : np.ndarray[float]
+            Analysis quantity on which to perform validation
+        q_min : float
+            Lower bound of `quantity`
+        q_max : float
+            Upper bound of `quantity`
+        name : str
+            Name of quantity used for logs
+
+        See Also
+        --------
+        etc/analysis.ini
+
+        Returns
+        -------
+        mask_good : np.ndarray[bool]
+            Boolean mask of currently-invalid DOMs that should be included in Analysis
+        mask_bad : np.ndarray[bool]
+            Boolean mask of currently-valid DOMs that should be excluded from Analysis
+        """
+        # Condition indicates that quant falls within bounds (True = "Good")
+        cond = (q_min < quantity) & (quantity < q_max)
+
+        # Detect changes, if no changes take no action
+        if not np.all(cond == ana.dom_status):
+            # Find good doms that have failed validation, and exclude them from analysis
+            #   (dom_status == True [Good DOM] and cond_bkg == False [DOM failed validation])
+            mask_bad = ana.dom_status & ~cond
+
+            # Find bad doms that have passed validation, and include them analysis
+            #   (dom_status == False [Bad DOM] and cond_bkg == True [DOM passed validation])
+            mask_good = ~ana.dom_status & cond
+
+            return mask_good, mask_bad
+        else:
+            # True in this case indicates tha this DOM's status should be change, by default make no changes
+            return np.zeros_like(cond), np.zeros_like(cond)
+
+    def validate_analysis(self, analysis):
+        """Performs validation on an SNDAQ Analysis. Checks are performed DOM-by-DOM and
+        offending DOMs' contributions are removed from analysis quantities.
+        """
+        # Validation only occurs on analyses that are ready to report results (is_online)
+        #    and are ready to be updated (is_updatable), meaning a new sum can be computed
+        if analysis.is_online and analysis.is_updatable:
+
+            # Analysis has enough contributing DOMs [bool]
+            cond_ndom = analysis.ndom > self.config.min_active_doms
+            if (analysis.is_valid and not cond_ndom) or (~analysis.is_valid and cond_ndom):
+                analysis.is_valid = ~analysis.is_valid
+                logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state!  is_valid: {analysis.is_valid}")
+
+            # DOM-wise checks
+            mask_good_mean, mask_bad_mean = self._validate_bounded_quantity(analysis, analysis.mean,
+                                                                           self.config.min_bkg_rate,
+                                                                           self.config.max_bkg_rate)
+            mask_good_fano, mask_bad_fano = self._validate_bounded_quantity(analysis, analysis.fano,
+                                                                           self.config.min_bkg_fano,
+                                                                           self.config.max_bkg_fano)
+            mask_good = mask_good_mean & mask_good_fano
+            mask_bad = mask_bad_mean & mask_bad_fano
+
+            if np.any(mask_bad):
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_bad.sum()} DOMs removed after failing validation")
+            if np.any(mask_good):
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_good.sum()} DOMs added after passing validation")
+            # TODO: Add Jitter & Noise Validation
+            # TODO: Add monitoring quantity for number of state changes
+            # TODO: Check if analysis sums present rates in Hz or counts (/binsize)
+
     def update(self, value):
         # TODO: Figure out how to enable streaming only analysis-binning data
         """Update raw buffer, analysis buffer, analyses sums and analysis results
@@ -598,7 +746,7 @@ class AnalysisHandler:
         # Decide what to do with them, Escalating triggers must be handled differently from Fast Response Triggers
         if potential_analyses:
             # Detect Escalating trigger
-            if isinstance(self.config.trigger_condition, FastResponseTrigger):
+            if self.config.trigger_condition is PrimaryTrigger:
                 xi = np.array([ana.xi for (_, ana) in potential_analyses])
                 xi_max = xi.max(initial=0.0)
 
@@ -615,9 +763,10 @@ class AnalysisHandler:
                     # TODO: Set this up with from_analysis method
                     self.candidates[0] = Trigger.from_analysis(ana, self.trigger_count, self.cand_count + 1)
 
-            if isinstance(self.config.trigger_condition, FastResponseTrigger):
+            if self.config.trigger_condition is FastResponseTrigger:
                 self.candidates += [Trigger.from_analysis(ana, 1, self.cand_count+1+idx)
                                     for (idx, ana) in potential_analyses]
+                logger.info(f"New FR Triggers formed in analysis {potential_analyses}")
                 # TODO: Streamline this when you move it to the trigger handler
                 self._n_trigger_close = 0  # NOTE: This is a hack to immediately finalize the trigger
             # TODO: Fix counting for cands
@@ -677,8 +826,8 @@ class AnalysisHandler:
 
 class Analysis:
     """Descriptor object to handle data access and algorithms for SNDAQ sico-analysis
-
     """
+    base_binsize_ms = 500
 
     def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0):
         """Create Analysis object
@@ -705,7 +854,12 @@ class Analysis:
         self._offset = offset  # ms
         self._rebin_factor = int(self._binsize / config.base_binsize)
         # TODO: Decide if ndom should always be 5160 or the number of doms in the current config
+
+        # Bookkeeping quantities
         self._ndom = ndom
+        self._dom_status = np.ones(self._ndom, dtype=bool)
+        self.n_ana = int((self._binsize + self._offset)/self._base_binsize)
+        self.is_valid = True
 
         self._nbin_nosearch = config.duration_nosearch / self._binsize
         self._nbin_background = (config.duration_bgl_ms + config.duration_bgt_ms) / self._binsize
@@ -718,6 +872,7 @@ class Analysis:
         self._idx_exl = self._idx_sw + int(self.binsize / self._base_binsize)  # Leading exclusion
         self._idx_bgl = self._idx_exl + int(config.duration_exl_ms / self._base_binsize)  # Leading background
         self.idx_eod = self._idx_bgl + int(config.duration_bgl_ms / self._base_binsize)  # End of data in analysis
+        self._n_eod_sw = self.idx_eod - self.idx_sw
 
         # Indices of Analysis buffer for "bins" to add to sums for analysis
         # Using np.arange here (np arrays as indices) allows all analyses to be indexed in the same way
@@ -746,13 +901,29 @@ class Analysis:
         self.n_to_trigger = self.idx_eod - self.idx_bgt + int(self.offset / config.base_binsize)
         self.n = 0
         self.start_time = start_time
-        self.utime_sw = datetime64_to_utime(start_time) - ((self.idx_eod - self.idx_sw) * int(self._base_binsize * 1e6))
+        self.year = start_time.astype('datetime64[Y]').item().year
+        self.utime_sw = datetime64_to_utime(start_time) - ((self.idx_eod - self.idx_sw) * int(self._base_binsize * 1e7))
         logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
 
     def __repr__(self):
-        repr_str = f"SNDAQ Binned Search #{int((self.binsize + self.offset)/self._base_binsize):<2d}: " +\
-            f"{self.binsize} +({self.offset}) s"
+        repr_str = f"SNDAQ Binned Search #{self.n_ana:<2d}: {self.binsize} +({self.offset}) s"
         return repr_str
+
+
+    def status(self):
+        """Obtain a status string
+
+        Returns
+        -------
+        status_string :str
+        """
+        status = '\n'.join([
+            repr(self),
+            f"is_triggerable: {self.is_triggerable}, is_updatable: {self.is_updatable}, is_online: {self.is_online}",
+            f"n={self.n}, n_accum={self.n_accum}, n_to_trigger={self.n_to_trigger}",
+            f"xi={self.xi}, dmu={self.dmu}, sig_dmu={self.var_dmu}, hit_sum={self.hit_sum}",
+        ])
+        return status
 
     @property
     def trigger_utime(self):
@@ -765,7 +936,7 @@ class Analysis:
         """Time in ms that is represented by this analysis' search window
         """
         if self.is_online:
-            return utime_to_datetime64(self.utime_sw, year=self.start_time.item().year)
+            return utime_to_datetime64(self.utime_sw, year=self.year)
         else:
             return np.datetime64("NaT")
 
@@ -773,6 +944,40 @@ class Analysis:
         """Reset Analysis accumulator sums after collecting 500 ms of data
         """
         self.n_accum = 0
+
+    def remove_doms(self, idc):
+        """Remove DOMs from analysis specified by indices in sum arrays
+        TODO: Change indices to DOM ID?
+
+        Parameters
+        ----------
+        idc : Indices in sum array of DOM to remove from analysis
+        """
+        self._ndom -= idc.size
+        self._dom_status[idc] = False
+
+    def add_doms(self, idc):
+        """Add DOMs to analysis specified by indices in sum arrays. Intended for use on re-validated DOMs
+        TODO: Change indices to DOM ID?
+
+        Parameters
+        ----------
+        idc : Indices in sum array of DOM to add back into analysis
+        """
+        self._ndom += idc.size
+        self._dom_status[idc] = True
+
+    @property
+    def dom_status(self):
+        """Array of Bool indicating which DOMs contribute (true) or are excluded (false) from this analysis
+        """
+        return self._dom_status
+
+    @property
+    def ndom(self):
+        """Number of DOMs currently contributing to this Analysis
+        """
+        return self._ndom
 
     @property
     def is_online(self):
@@ -850,7 +1055,7 @@ class Analysis:
 
         Returns
         -------
-        mean : float
+        mean : np.ndarray[float]
             Mean of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
@@ -862,11 +1067,23 @@ class Analysis:
 
         Returns
         -------
-        variance : float
+        variance : np.ndarray[float]
             Variance of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
         return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum ** 2)) / self.nbin_bg ** 2
+
+    @property
+    def fano(self):
+        """Background rate Fano factor (variance-to-mean ratio)
+
+        Returns
+        -------
+        fano : np.ndarray[float]
+            DOM-wise fano factor for all DOMs
+        """
+        # TODO: Unit test for float type!
+        return np.divide(self.var, self.mean, out=np.zeros_like(self.var), where=self.mean != 0)
 
     @property
     def std(self):
@@ -923,6 +1140,10 @@ class Analysis:
             Duration of analysis window in ms, comprised of background, exclusion, and search window
         """
         return (self._nbin_nosearch + 1) * self.binsize
+
+    @property
+    def n_eod_sw(self):
+        return self._n_eod_sw
 
     @property
     def idx_bgl(self):

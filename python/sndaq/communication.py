@@ -78,7 +78,7 @@ class RunInfoAgent(object):
         """
     instance = None
 
-    def __new__(cls, host=None):
+    def __new__(cls, host=None, force=False, *, run_number=None):
         """
 
         Parameters
@@ -86,12 +86,16 @@ class RunInfoAgent(object):
         host : str
             Host where i3Live service is running
         """
-        if cls.instance is None:
+        if host is None and cls.instance is None:
+            raise RuntimeError("No Host was provided!")
+        elif cls.instance is None:
             cls.instance = super(RunInfoAgent, cls).__new__(cls)
             cls.instance.host = host
             cls.instance.url = f'https://{host}/run_info/'
-        elif cls.instance is not None and host is not None:
-            warnings.warn(f"A run Info Client already exists using host {cls.instance.host}! Ignoring argument `host`")
+            cls.instance.run_number = run_number
+        elif force:
+            cls.instance = None
+            return cls.__new__(cls, host, force=True)
         return cls.instance
 
     def find_run_number(self, timestamp=None):
@@ -108,6 +112,8 @@ class RunInfoAgent(object):
         run_number : int
             The run during which `timestamp` falls, or the current run
         """
+        if self.run_number:
+            return self.run_number
         # Assumes run duration is ~8 hrs, extra time is added in order to ensure interval includes the correct run
         if timestamp is None:
             start_time = np.datetime64(datetime.datetime.now().date(), 's')  # 's' is required for proper str formatting
@@ -158,13 +164,36 @@ class RunInfoAgent(object):
         return query_live_json_view(self.url, params)
 
 
+class OfflineMoniClient:
+    """Simple class to perform offline "messaging" s.t. moni messages sent to live are re-routed to logs.
+    """
+
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def send_moni(varname, prio, value):
+        """Send a monitoring packet to logs. The signature of this function matches LiveMessageSender.send_moni()
+
+        Parameters
+        ----------
+        varname : str
+            i3Live Monitoring variable name
+        prio : int
+            Priority level
+        value : str or dict
+            Data transmitted to i3Live (written to Log in this case)
+        """
+        logger.debug(f"Offline Live Message: varname={varname}, prio={prio} ,value={value}")
+
+
 class LiveMessageSender(object):
     """Singleton Live message sender object
     """
     instance = None
     _fra_statuses = ['QUEUED', 'IN PROGRESS', 'SUCCESS', 'FAIL']
 
-    def __new__(cls, moni_host=None, moni_port=None, msg=None):
+    def __new__(cls, moni_host=None, moni_port=None, msg=None, offline=False):
         """
 
         Parameters
@@ -176,7 +205,11 @@ class LiveMessageSender(object):
         """
         if cls.instance is None:
             cls.instance = super(LiveMessageSender, cls).__new__(cls)
-            cls.instance.sender = ZMQMoniClient(svc='sndaq_fra', moni_host=moni_host, moni_port=moni_port)
+            cls.instance.offline = offline
+            if not cls.instance.offline:
+                cls.instance.sender = ZMQMoniClient(svc='sndaq_fra', moni_host=moni_host, moni_port=moni_port)
+            else:
+                cls.instance.sender = OfflineMoniClient()
             cls.instance._request_id = None
             cls.msg = msg
         return cls.instance
@@ -213,7 +246,7 @@ class LiveMessageSender(object):
             pass  # Do something to de-register alert with sender
         else:
             err_state = 0
-        #TODO Change to Info
+
         self.msg.update({'status': status, "request_id": request_id})
         self.sender.send_moni(varname='sndaq_fra_info', prio=2, value=self.msg)
         return err_state
@@ -232,5 +265,6 @@ class LiveMessageSender(object):
         -------
 
         """
-        self.msg.update({"data": data, "request_id": request_id})
+        self.msg.update({'status': "SUCCESS", "data": data, "request_id": request_id})
         self.sender.send_moni(varname='sndaq_fra_info', prio=2, value=self.msg)
+        logger.info("Sent FR result to i3Live")

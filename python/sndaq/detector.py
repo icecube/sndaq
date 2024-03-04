@@ -1,6 +1,8 @@
 """IceCube Detector, DOM Tables, and related utility functions
 """
 import numpy as np
+from sndaq import base_path
+import os
 
 dom_table_dtypes = [
     ('str', 'f4'),
@@ -16,7 +18,7 @@ dom_table_dtypes = [
 class Detector:
     """IceCube Detector. An object containing DOM tables, maps for DOM IDs and DOM validation functions
     """
-    def __init__(self, doms_table='../../etc/full_dom_table.txt'):
+    def __init__(self, doms_table=os.path.join(base_path, 'etc/full_dom_table.txt')):
         # May need to update file, and perform filtering on IceTop DOMs (08/09/21 SG)
         self.dom_table = np.genfromtxt(doms_table, dtype=dom_table_dtypes,
                                        converters={5: lambda s: int(s, 16)}, encoding=None)

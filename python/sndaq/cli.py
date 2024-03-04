@@ -129,13 +129,13 @@ def _process_json(args):
 
     if data['fr_type'].lower() == 'ccsn':
         logger.debug("Using default ccsn request config")
-        ana_conf_path = os.path.join(base_path, 'data/config/ccsn_fra.config')
+        ana_conf_path = os.path.join(base_path, 'etc/ccsn_fra.ini')
     elif data['fr_type'].lower() == 'merger':
         logger.debug("Using default merger request config")
-        ana_conf_path = os.path.join(base_path, 'data/config/merger_fra.config')
+        ana_conf_path = os.path.join(base_path, 'etc/merger_fra.ini')
     else:
         logger.warning(f"Unknown configuration '{data['fr_type']}' requested")
-        ana_conf_path = os.path.join(base_path, 'data/config/analysis.config')
+        ana_conf_path = os.path.join(base_path, 'etc/analysis.ini')
 
     if not os.path.exists(ana_conf_path):
         msg = f"Analysis Config `{ana_conf_path}` not found"
@@ -156,13 +156,10 @@ def _process_json(args):
     ana_conf._duration_exl_ms = data['excl_duration'][0]
     ana_conf._duration_ext_ms = data['excl_duration'][1]
 
-    # Needs a better name
-    fh_conf_path = os.path.join(base_path, 'data/config/default.config')  # May want to have custom config for FRA
-
-    launch_sndaq(ana_conf=ana_conf, fh_conf_path=fh_conf_path, request_id=data['request_id'],
+    logger.info("Queued Request for processing")  # TODO Add queueing
+    launch_sndaq(ana_conf=ana_conf, conf_path=args.conf_path, request_id=data['request_id'],
                  start_time=data['start_time'], stop_time=data['stop_time'],
-                 lightcurve=data['lc_duration'], msg=data, no_run_mode=False)
-    logger.info("queued for processing")
+                 lightcurve=data['lc_duration'], msg=data, no_run_mode=False, offline_mode=True)
 
 
 def main():

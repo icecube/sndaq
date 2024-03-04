@@ -103,23 +103,25 @@ class Reader(object):
 
 
 class HS_Payload(object):
+    """Data Container for HitSpool Delta Compressed Hits
+    """
 
     def __init__(self, utime, dom_id, data, keep_data=True):
         """Convert HitSpool record data bytes into payload object.
+
         See PayloadReader.decode_payload() for full description of record format.
         Assumes argument data contains 38 bytes of additional payload fields before waveform data begins.
 
-        :param utime: UTC timestamp from year start
-        :type utime: int
-
-        :param dom_id: DOM Motherboard ID number
-        :type dom_id: int
-
-        :param data: compressed waveform bytes
-        :type data: bytearray
-
-        :param keep_data: Switch to keep data (true) or skip (false)
-        :type keep_data: bool
+        Parameters
+        ----------
+        utime : int
+            UTC timestamp from year start
+        dom_id : int
+            DOM Motherboard ID number
+        data : bytearray or bytes
+            compressed waveform bytes
+        keep_data : bool
+            Switch to keep data (true) or skip (false)
         """
         self.__utime = utime
 
@@ -368,14 +370,18 @@ class HS_PayloadReader(Reader):
 
     @classmethod
     def decode_payload(cls, stream, keep_data=True):
-        """Decode and return the next payload.
+        """Decode and return the next payload
 
-        :param stream: File object containing bytes open in read mode
-        :type stream: file
-        :param keep_data: If true, write waveform data to HS_payload, if false waveform data will be written as None
-        :type keep_data: bool
-        :return: HitSpool Payload
-        :rtype: HS_Payload
+        Parameters
+        ----------
+        stream : io.BinaryIO
+            File stream object containing bytes open in binary read mode
+        keep_data : bool
+            If true, write waveform data to HS_payload, if false waveform data will be written as None
+        Returns
+        -------
+        payload : HS_Payload
+            HitSpool Payload
         """
         envelope = stream.read(HS_ENVELOPE_LENGTH)
         if len(envelope) == 0:
@@ -398,6 +404,15 @@ class HS_PayloadReader(Reader):
 
 
 def read_file(filename, max_payloads) -> None:
+    """Read a file of HitSpool Payloads and print them to stdout
+
+    Parameters
+    ----------
+    filename : str or PathLike
+        filename or path to HitSpool data file
+    max_payloads : int
+        Number of payloads to read
+    """
     with HS_PayloadReader(filename) as rdr:
         for pay in rdr:
             if max_payloads is not None and rdr.nrec > max_payloads:

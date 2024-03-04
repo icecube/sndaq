@@ -12,6 +12,7 @@ class TriggerBase(ABC):
     """Trigger condition base class
     """
     name: str
+    dt_to_close: float
 
     @classmethod
     @abstractmethod
@@ -32,6 +33,7 @@ class PrimaryTrigger(TriggerBase):
     name = "primary"
     threshold = 4.0
     threshold_corr = 0.0
+    dt_to_close = 30000
 
     @classmethod
     def check(cls, ana):
@@ -55,6 +57,7 @@ class FastResponseTrigger(TriggerBase):
     """
     name = "fast_response"
     trigger_time = None
+    dt_to_close = 0
 
     @classmethod
     def set_trigger_time(cls, trigger_time):
@@ -80,13 +83,18 @@ class FastResponseTrigger(TriggerBase):
         trigger_met : bool
             True if Analysis' search window overlaps with
         """
-        if not ana.is_triggerable:
+        # Add visibility to nonetype timestamps error
+        assert(ana.trigger_datetime64 is not None)
+        assert(cls.trigger_time is not None)
+
+        if not ana.is_triggerable or not ana.is_online:
             return False
         # Broken into two parts because the following processing isn't necessary if the analysis is untriggerable
         ana_time = ana.trigger_datetime64
-        trigger_time_matches = (ana_time < cls.trigger_time &
-                                cls.trigger_time < ana_time + np.timedelta64(ana.binsize, 'ms'))
+        trigger_time_matches = ((ana_time < cls.trigger_time) &
+                                (cls.trigger_time < ana_time + np.timedelta64(ana.binsize, 'ms')))
         return trigger_time_matches
+
 
 class EscalationTrigger(TriggerBase):
     """Base class for Escalating xi threshold triggers
@@ -198,7 +206,6 @@ class TriggerConfig:
     # Also, "___TriggerLevel" refers to muon-corrected triggers. For now this scheme is reversed in PySNDAQ,
     # As I (sgriswold) find this more intuitive, and am starting with testing against triggers w/o muon correction
     _trigger_levels = sorted((
-        PrimaryTrigger,
         BasicTrigger,
         SNWGTrigger,
         SNEWSTrigger,
@@ -240,16 +247,14 @@ class TriggerHandler(TriggerConfig):
         -------
 
         """
-        if isinstance(self.primary_trigger, FastResponseTrigger):
+        if self.primary_trigger is FastResponseTrigger:
             pass
-        elif isinstance(self.primary_trigger, PrimaryTrigger):
-            pass
-
-        levels_to_process = [level for level in self._trigger_levels if (cand.xi >= level.threshold or
-                                                                         cand.xi_corr >= level.threshold_corr)]
-        # Process from highest level to lowest
-        for level in reversed(levels_to_process):
-            level.process(cand)
+        elif self.primary_trigger is PrimaryTrigger:
+            levels_to_process = [level for level in self._trigger_levels if (cand.xi >= level.threshold or
+                                                                             cand.xi_corr >= level.threshold_corr)]
+            # Process from highest level to lowest
+            for level in reversed(levels_to_process):
+                level.process(cand)
 
 
 class Trigger:
@@ -321,8 +326,8 @@ class Trigger:
         Trigger : sndaq.trigger.Trigger
 
         """
-        return cls.__init__(xi=ana.xi, xi_corr=0, t=ana.trigger_utime, binsize=ana.binsize,
-                            offset=ana.offset, trigger_no=trigger_no, cand_no=cand_no)
+        return cls(ana=ana, xi=ana.xi, xi_corr=0, t=ana.trigger_utime, binsize=ana.binsize,
+                   offset=ana.offset, trigger_no=trigger_no, cand_no=cand_no)
 
 
 class Candidate:

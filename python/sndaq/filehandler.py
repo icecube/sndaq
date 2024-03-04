@@ -10,6 +10,9 @@ import re
 import ast  # TODO: Replace with pyyaml
 import tarfile
 
+from sndaq.logger import get_logger
+
+logger = get_logger()
 
 class FileHandler:
     """Handler for SNDAQ files
@@ -94,7 +97,7 @@ class FileHandler:
     @classmethod
     def from_config(cls, conf=None, conf_path=None):
         # TODO: Figure out how to avoid duplicating code here, perhaps make this an ABC or inherited method?
-        """Initialize AnalysisConfig from Config or Config file
+        """Initialize FileHandler from Config or Config file
 
         Parameters
         ----------
@@ -106,6 +109,10 @@ class FileHandler:
         if conf is None and conf_path is None:
             raise ValueError("Missing configuration")
         elif conf is None and conf_path is not None:
+            if not os.path.exists(conf_path):
+                err_msg = f"Unable to find config file: {conf_path}"
+                logger.error(err_msg)
+                raise RuntimeError(err_msg)
             conf = ConfigParser()
             conf.read(conf_path)
 
@@ -175,7 +182,7 @@ class FileHandler:
         diff = (cand.trigger.t - timestamps).astype(int)
 
         # TODO: change this s.t. it depends on the config, this assumes symmetrical time window
-        n_after = 4
+        n_after = 6
         n_before = 6
 
         # Get `n_before` files from before the trigger and `n_after` files from after the trigger
