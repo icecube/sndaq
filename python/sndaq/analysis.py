@@ -870,6 +870,8 @@ class Analysis:
 
         self._nbin_nosearch = config.duration_nosearch / self._binsize
         self._nbin_background = (config.duration_bgl_ms + config.duration_bgt_ms) / self._binsize
+        # Handles rounding for non-integer bkg window to binsize ratio
+        self._nbin_background = int(self._nbin_background) + int(bool(self._nbin_background))
 
         # Indices for accessing data buffer, all point to first column in respective region
         # TODO: Check alignment so all start filling as soon as possible
@@ -1084,7 +1086,7 @@ class Analysis:
             Variance of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
-        return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum ** 2)) / self.nbin_bg ** 2
+        return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum ** 2)) / (self.nbin_bg ** 2)
 
     @property
     def fano(self):
