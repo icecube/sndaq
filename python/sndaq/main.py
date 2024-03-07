@@ -88,7 +88,8 @@ def main(*args, **kwargs):
 
         # TODO Figure out a better way of handling this for FR
         result_dict = {'xi': {},
-                       'lightcurve': {}}
+                       'lightcurve': {},
+                       'ana': {}}
 
         # Main SNDAQ Loop
         # TODO: Clean this up!
@@ -148,7 +149,13 @@ def main(*args, **kwargs):
                         # 2 - The current candidate has a higher xi result than the previously stored candidate
                         # NOTE: Here, get() provides a safe way to access the dict without crashing due to KeyErrors
                         if (not result_dict['lightcurve'].get(str(cand.binsize), None) or
-                                result_dict['lightcurve'].get(str(cand.binsize), {}).get('xi', -np.inf) < cand.xi):
+                                result_dict['xi'].get(str(cand.binsize), {}).get('value', -np.inf) < cand.xi):
+
+                            if result_dict['lightcurve'].get(str(cand.binsize), None):
+                                logger.debug(f"Candidate in Analysis[{result_dict['ana']['number']}] "
+                                             f"(xi={result_dict['xi'][str(cand.binsize)]['value']:8.5f}) "
+                                             f"Overwritten by Candidate in Analysis[{cand.ana.n_ana}]"
+                                             f"(xi={cand.ana.xi:8.5f})")
                             result_dict['lightcurve'].update({
                                 str(cand.binsize): {
                                     'data': ana.get_avg_lightcurve(cand.ana,
@@ -160,6 +167,8 @@ def main(*args, **kwargs):
                                 str(cand.binsize): {
                                     'value': cand.ana.xi}
                             })
+                            result_dict['ana'].update({'number': cand.ana.n_ana})
+
 
                     # Reset Pending Trigger counter & container
                     ana.candidates = []

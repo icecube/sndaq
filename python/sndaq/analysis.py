@@ -706,10 +706,12 @@ class AnalysisHandler:
             mask_bad = mask_bad_mean & mask_bad_fano
 
             if np.any(mask_bad):
-                logger.debug(f"Analysis #{analysis.n_ana}: {mask_bad.sum()} DOMs removed after failing validation")
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_bad.sum()} DOMs removed after failing validation "
+                             f"(n_active={analysis.dom_status.sum() - mask_bad.sum()})")
                 analysis.remove_doms(mask_bad)
             if np.any(mask_good):
-                logger.debug(f"Analysis #{analysis.n_ana}: {mask_good.sum()} DOMs added after passing validation")
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_good.sum()} DOMs added after passing validation "
+                             f"(n_active={analysis.dom_status.sum() + mask_good.sum()})")
                 analysis.add_doms(mask_good)
             # TODO: Add Jitter & Noise Validation
             # TODO: Add monitoring quantity for number of state changes
@@ -911,7 +913,7 @@ class Analysis:
         self.utime_sw = datetime64_to_utime(start_time) - (
                 self._n_eod_sw * int(self._base_binsize * 1e7) + int(self._offset * 1e7)
         )
-        logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
+        logger.debug(f"{self} Initialized")
 
     def __repr__(self):
         repr_str = f"SNDAQ Binned Search #{self.n_ana:<2d}: {self.binsize} +({self.offset}) s"
