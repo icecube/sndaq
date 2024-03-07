@@ -159,7 +159,7 @@ class AnalysisConfig:
 
     @property
     def binsize_ms(self):
-        """Base analysis binsize in ms
+        """Analyses binsizes in ms
 
         Returns
         -------
@@ -318,12 +318,15 @@ class AnalysisHandler:
 
         # Create analyses
         self.analyses = []
+        n = 0
         for binning in np.asarray(self._binnings, dtype=dtype):
             for offset in np.arange(0, binning, 500, dtype=dtype):  # TODO: Increment by binsize not 500
                 idx = int(self._size - (config.duration_nosearch + offset + binning) / config.base_binsize)
                 self.analyses.append(
-                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=self._start_time)
+                    Analysis(config, binning, offset, idx=idx, ndom=self._ndom, start_time=self._start_time, n_ana=n)
                 )
+                n += 1
+
         Analysis.base_binsize_ms = self.config.base_binsize
 
         # Define counter for accumulation used in rebinning from raw to base analysis
@@ -534,11 +537,11 @@ class AnalysisHandler:
 
         if analysis.is_updatable:
             # TODO: Find better names for these
-            add_to_bgl = self.buffer_analysis[analysis.idx_addbgl].sum(axis=0)
-            sub_from_bgl = self.buffer_analysis[analysis.idx_subbgl].sum(axis=0)
+            add_to_bgl = self.buffer_analysis[analysis.idx_addbgl]
+            sub_from_bgl = self.buffer_analysis[analysis.idx_subbgl]
 
-            add_to_bgt = self.buffer_analysis[analysis.idx_addbgt].sum(axis=0)
-            sub_from_bgt = self.buffer_analysis[analysis.idx_subbgt].sum(axis=0)
+            add_to_bgt = self.buffer_analysis[analysis.idx_addbgt]
+            sub_from_bgt = self.buffer_analysis[analysis.idx_subbgt]
 
             add_to_sw = self.buffer_analysis[analysis.idx_addsw].sum(axis=0)
             sub_from_sw = self.buffer_analysis[analysis.idx_subsw].sum(axis=0)
@@ -546,11 +549,11 @@ class AnalysisHandler:
             analysis.rate += add_to_sw
             analysis.rate -= sub_from_sw
 
-            analysis.hit_sum += add_to_bgl + add_to_bgt
-            analysis.hit_sum -= (sub_from_bgl + sub_from_bgt)
+            analysis.hit_sum += add_to_bgl.sum(axis=0) + add_to_bgt.sum(axis=0)
+            analysis.hit_sum -= (sub_from_bgl.sum(axis=0) + sub_from_bgt.sum(axis=0))
 
-            analysis.hit_sum2 += (add_to_bgl ** 2 + add_to_bgt ** 2)
-            analysis.hit_sum2 -= (sub_from_bgl ** 2 + sub_from_bgt ** 2)
+            analysis.hit_sum2 += ((add_to_bgl**2).sum(axis=0) + (add_to_bgt**2).sum(axis=0))
+            analysis.hit_sum2 -= ((sub_from_bgl**2).sum(axis=0) + (sub_from_bgt**2).sum(axis=0))
 
     def update_results(self, analysis):
         """Update SICO analysis results
@@ -628,7 +631,7 @@ class AnalysisHandler:
         # _ndom and _dtype could be removed if this was part of an accumulator object, defined during init.
         self._accum_count = self._rebin_factor
 
-    def _validate_bounded_quantity(self, ana, quantity, q_min, q_max, name=None):
+    def _validate_bounded_quantity(self, ana, quantity, q_min, q_max):
         """ Perform validation on analysis quantity based on config-specified bounds.
         DOMs failing validation (quantities outside bounds) are excluded from analysis sums
         Default Quantites are bkg Hit rate: mean, variance, & fano
@@ -688,24 +691,28 @@ class AnalysisHandler:
 
             # Analysis has enough contributing DOMs [bool]
             cond_ndom = analysis.ndom > self.config.min_active_doms
-            if (analysis.is_valid and not cond_ndom) or (~analysis.is_valid and cond_ndom):
-                analysis.is_valid = ~analysis.is_valid
-                logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state!  is_valid: {analysis.is_valid}")
+            if (analysis.is_valid and not cond_ndom) or (not analysis.is_valid and cond_ndom):
+                analysis.is_valid = not analysis.is_valid
+                logger.debug(f"Analysis #{analysis.n_ana} nDOM check changed state[{analysis.ndom}]!  is_valid: {analysis.is_valid:}")
 
             # DOM-wise checks
             mask_good_mean, mask_bad_mean = self._validate_bounded_quantity(analysis, analysis.mean,
-                                                                           self.config.min_bkg_rate,
-                                                                           self.config.max_bkg_rate)
+                                                                            self.config.min_bkg_rate,
+                                                                            self.config.max_bkg_rate)
             mask_good_fano, mask_bad_fano = self._validate_bounded_quantity(analysis, analysis.fano,
-                                                                           self.config.min_bkg_fano,
-                                                                           self.config.max_bkg_fano)
+                                                                            self.config.min_bkg_fano,
+                                                                            self.config.max_bkg_fano)
             mask_good = mask_good_mean & mask_good_fano
             mask_bad = mask_bad_mean & mask_bad_fano
 
             if np.any(mask_bad):
-                logger.debug(f"Analysis #{analysis.n_ana}: {mask_bad.sum()} DOMs removed after failing validation")
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_bad.sum()} DOMs removed after failing validation "
+                             f"(n_active={analysis.dom_status.sum() - mask_bad.sum()})")
+                analysis.remove_doms(mask_bad)
             if np.any(mask_good):
-                logger.debug(f"Analysis #{analysis.n_ana}: {mask_good.sum()} DOMs added after passing validation")
+                logger.debug(f"Analysis #{analysis.n_ana}: {mask_good.sum()} DOMs added after passing validation "
+                             f"(n_active={analysis.dom_status.sum() + mask_good.sum()})")
+                analysis.add_doms(mask_good)
             # TODO: Add Jitter & Noise Validation
             # TODO: Add monitoring quantity for number of state changes
             # TODO: Check if analysis sums present rates in Hz or counts (/binsize)
@@ -829,7 +836,7 @@ class Analysis:
     """
     base_binsize_ms = 500
 
-    def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0):
+    def __init__(self, config, binsize, offset, idx=0, ndom=5160, start_time=0, n_ana=0):
         """Create Analysis object
 
         Parameters
@@ -858,11 +865,13 @@ class Analysis:
         # Bookkeeping quantities
         self._ndom = ndom
         self._dom_status = np.ones(self._ndom, dtype=bool)
-        self.n_ana = int((self._binsize + self._offset)/self._base_binsize)
+        self.n_ana = n_ana
         self.is_valid = True
 
         self._nbin_nosearch = config.duration_nosearch / self._binsize
         self._nbin_background = (config.duration_bgl_ms + config.duration_bgt_ms) / self._binsize
+        # Handles rounding for non-integer bkg window to binsize ratio
+        self._nbin_background = int(self._nbin_background) + int(bool(self._nbin_background))
 
         # Indices for accessing data buffer, all point to first column in respective region
         # TODO: Check alignment so all start filling as soon as possible
@@ -902,8 +911,11 @@ class Analysis:
         self.n = 0
         self.start_time = start_time
         self.year = start_time.astype('datetime64[Y]').item().year
-        self.utime_sw = datetime64_to_utime(start_time) - ((self.idx_eod - self.idx_sw) * int(self._base_binsize * 1e7))
-        logger.debug(f"Analysis {self.binsize}+({self.offset}) Initialized")
+        # search window is shifted back in time, offset pushes it further back in time
+        self.utime_sw = datetime64_to_utime(start_time) - (
+                self._n_eod_sw * int(self._base_binsize * 1e7) + int(self._offset * 1e7)
+        )
+        logger.debug(f"{self} Initialized")
 
     def __repr__(self):
         repr_str = f"SNDAQ Binned Search #{self.n_ana:<2d}: {self.binsize} +({self.offset}) s"
@@ -945,27 +957,30 @@ class Analysis:
         """
         self.n_accum = 0
 
-    def remove_doms(self, idc):
-        """Remove DOMs from analysis specified by indices in sum arrays
-        TODO: Change indices to DOM ID?
+    def remove_doms(self, mask):
+        """Remove DOMs from analysis specified by boolean mask of DOMs in sum arrays
+        TODO: better to do with idx or by mask?
 
         Parameters
         ----------
-        idc : Indices in sum array of DOM to remove from analysis
+        mask : np.ndarray[bool]
+            mask of DOMs what are to be removed from analysis
         """
-        self._ndom -= idc.size
-        self._dom_status[idc] = False
+        self._ndom -= mask.sum()
+        self._dom_status[mask] = False
 
-    def add_doms(self, idc):
-        """Add DOMs to analysis specified by indices in sum arrays. Intended for use on re-validated DOMs
-        TODO: Change indices to DOM ID?
+    def add_doms(self, mask):
+        """Add DOMs to analysis specified by boolean mask of DOMs in sum arrays.
+        Intended for use on re-validated DOMs, not to populate the DOM table
+        TODO: better to do with idx or by mask?
 
         Parameters
         ----------
-        idc : Indices in sum array of DOM to add back into analysis
+        mask : np.ndarray[bool]
+            mask of DOMs what are to be re-added to analysis
         """
-        self._ndom += idc.size
-        self._dom_status[idc] = True
+        self._ndom += mask.sum()
+        self._dom_status[mask] = True
 
     @property
     def dom_status(self):
@@ -1071,7 +1086,7 @@ class Analysis:
             Variance of background hit rate per bin measured across both background windows
         """
         # TODO: Unit test for float type!
-        return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum ** 2)) / self.nbin_bg ** 2
+        return ((self.nbin_bg * self.hit_sum2) - (self.hit_sum ** 2)) / (self.nbin_bg ** 2)
 
     @property
     def fano(self):

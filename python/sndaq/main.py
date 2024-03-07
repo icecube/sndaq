@@ -67,7 +67,8 @@ def main(*args, **kwargs):
         start_time = kwargs['start_time']
         stop_time = kwargs['stop_time'] if 'stop_time' in kwargs else None
         if stop_time is None:
-            stop_time = np.datetime64(start_time) + np.timedelta64(ana.config.base_binsize, 'ms')
+            # Twice the greatest binsize here include the largest search window + offsest combination
+            stop_time = np.datetime64(start_time) + 2*np.timedelta64(max(ana.config.binsize_ms), 'ms')
 
         assert (start_time is not None)
         start_time = np.datetime64(start_time)
@@ -87,7 +88,8 @@ def main(*args, **kwargs):
 
         # TODO Figure out a better way of handling this for FR
         result_dict = {'xi': {},
-                       'lightcurve': {}}
+                       'lightcurve': {},
+                       'ana': {}}
 
         # Main SNDAQ Loop
         # TODO: Clean this up!
@@ -141,23 +143,34 @@ def main(*args, **kwargs):
                     ana.cand_count += len(ana.candidates)
                     for cand in ana.candidates:
                         alert.process_cand(cand)
-                        # update if any of the following conditoions are met:
-                        # 1 - Result dict is empty of lightcurves
-                        # 2 - Result Dict has a lightcurve, but in a different binning
-                        # 3 - The current candidate has a higher TS in a seach with the same binsize
-                        if (not result_dict['lightcurve'] or
-                            not result_dict['lightcurve'][str(cand.binsize)] or
-                                result_dict['lightcurve'][str(cand.binsize)]['xi'] < cand.xi):
+
+                        # Update if either of the following conditions are met:
+                        # 1 - The dict lacks a lightcurve & xi in this binning (Only one need be detected)
+                        # 2 - The current candidate has a higher xi result than the previously stored candidate
+                        # NOTE: Here, get() provides a safe way to access the dict without crashing due to KeyErrors
+                        if (not result_dict['lightcurve'].get(str(cand.binsize), None) or
+                                result_dict['xi'].get(str(cand.binsize), {}).get('value', -np.inf) < cand.xi):
+
+                            if result_dict['lightcurve'].get(str(cand.binsize), None):
+                                logger.debug(f"Candidate in Analysis[{result_dict['ana']['number']}] "
+                                             f"(xi={result_dict['xi'][str(cand.binsize)]['value']:8.5f}) "
+                                             f"Overwritten by Candidate in Analysis[{cand.ana.n_ana}]"
+                                             f"(xi={cand.ana.xi:8.5f})")
                             result_dict['lightcurve'].update({
-                                str(cand.binsize):
-                                    {'data': ana.get_avg_lightcurve(cand.ana,
-                                                                    int(kwargs['lightcurve'][0]),
-                                                                    int(kwargs['lightcurve'][1])),
-                                     'offset_ms': int(kwargs['lightcurve'][0] % cand.binsize)}
+                                str(cand.binsize): {
+                                    'data': ana.get_avg_lightcurve(cand.ana,
+                                                                   int(kwargs['lightcurve'][0]),
+                                                                   int(kwargs['lightcurve'][1])),
+                                    'offset_ms': int(kwargs['lightcurve'][0] % cand.binsize)}
                             })
-                            result_dict['xi'].update(
-                                {str(cand.binsize): {'value': cand.ana.xi}}
-                            )
+                            result_dict['xi'].update({
+                                str(cand.binsize): {
+                                    'value': cand.ana.xi}
+                            })
+                            result_dict['ana'].update({'number': cand.ana.n_ana})
+
+
+                    # Reset Pending Trigger counter & container
                     ana.candidates = []
                     ana.trigger_count = 0
 

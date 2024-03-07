@@ -173,9 +173,9 @@ class DataHandler:
         data_start = utime_to_datetime64(self.payload.utime, start_time.astype('datetime64[Y]').item().year)
         file_times = np.timedelta64(60, 's') * idc + data_start
 
-        # search between [t_sw - (t_bkg_t + 1 min), t_sw + t_bkg_l + 1min], extra 2 min to ensure file selection
-        t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta64(1, 'm'))
-        t1 = stop_datetime + (np.timedelta64(buffer_time_l, 'ms') + np.timedelta64(1, 'm'))
+        # search between [t_sw - (t_bkg_t + 1 min), t_sw + t_bkg_l + 1min], extra 4 min to ensure file selection
+        t0 = start_datetime - (np.timedelta64(buffer_time_t, 'ms') + np.timedelta64(2, 'm'))
+        t1 = stop_datetime + (np.timedelta64(buffer_time_l, 'ms') + np.timedelta64(2, 'm'))
 
         logger.debug(
             f"start_datetime={start_datetime} stop_datetime={stop_datetime} buffer_time_t={buffer_time_t} buffer_time_l={buffer_time_l}")
