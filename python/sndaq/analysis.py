@@ -537,11 +537,11 @@ class AnalysisHandler:
 
         if analysis.is_updatable:
             # TODO: Find better names for these
-            add_to_bgl = self.buffer_analysis[analysis.idx_addbgl].sum(axis=0)
-            sub_from_bgl = self.buffer_analysis[analysis.idx_subbgl].sum(axis=0)
+            add_to_bgl = self.buffer_analysis[analysis.idx_addbgl]
+            sub_from_bgl = self.buffer_analysis[analysis.idx_subbgl]
 
-            add_to_bgt = self.buffer_analysis[analysis.idx_addbgt].sum(axis=0)
-            sub_from_bgt = self.buffer_analysis[analysis.idx_subbgt].sum(axis=0)
+            add_to_bgt = self.buffer_analysis[analysis.idx_addbgt]
+            sub_from_bgt = self.buffer_analysis[analysis.idx_subbgt]
 
             add_to_sw = self.buffer_analysis[analysis.idx_addsw].sum(axis=0)
             sub_from_sw = self.buffer_analysis[analysis.idx_subsw].sum(axis=0)
@@ -549,11 +549,11 @@ class AnalysisHandler:
             analysis.rate += add_to_sw
             analysis.rate -= sub_from_sw
 
-            analysis.hit_sum += add_to_bgl + add_to_bgt
-            analysis.hit_sum -= (sub_from_bgl + sub_from_bgt)
+            analysis.hit_sum += add_to_bgl.sum(axis=0) + add_to_bgt.sum(axis=0)
+            analysis.hit_sum -= (sub_from_bgl.sum(axis=0) + sub_from_bgt.sum(axis=0))
 
-            analysis.hit_sum2 += (add_to_bgl ** 2 + add_to_bgt ** 2)
-            analysis.hit_sum2 -= (sub_from_bgl ** 2 + sub_from_bgt ** 2)
+            analysis.hit_sum2 += ((add_to_bgl**2).sum(axis=0) + (add_to_bgt**2).sum(axis=0))
+            analysis.hit_sum2 -= ((sub_from_bgl**2).sum(axis=0) + (sub_from_bgt**2).sum(axis=0))
 
     def update_results(self, analysis):
         """Update SICO analysis results
